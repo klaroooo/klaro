@@ -65,8 +65,10 @@ const hardfork_t mainnet_hard_forks[] = {
   // version 11 starts from block 1788720, which is on or around the 10th of March, 2019. Fork time finalised on 2019-02-15.
  // { 11, 1788720, 0, 1550225678 },
 
-  // version 12 starts from block 1978433, which is on or around the 30th of November, 2019. Fork time finalised on 2019-10-18.
+  
   { 8, 235000, 0, 1571419280 },
+  // Activate RandomX HFPI
+  { 12, 235335, 0, 1571419280 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = 0;
