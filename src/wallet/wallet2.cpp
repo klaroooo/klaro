@@ -142,7 +142,7 @@ using namespace cryptonote;
 
 #define DEFAULT_INACTIVITY_LOCK_TIMEOUT 90 // a minute and a half
 
-#define IGNORE_LONG_PAYMENT_ID_FROM_BLOCK_VERSION 12
+#define IGNORE_LONG_PAYMENT_ID_FROM_BLOCK_VERSION 55
 
 static const std::string MULTISIG_SIGNATURE_MAGIC = "SigMultisigPkV1";
 static const std::string MULTISIG_EXTRA_INFO_MAGIC = "MultisigxV1";
