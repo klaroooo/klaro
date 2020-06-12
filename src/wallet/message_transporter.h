@@ -34,9 +34,9 @@
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "net/http_server_impl_base.h"
 #include "net/http_client.h"
+#include "net/abstract_http_client.h"
 #include "common/util.h"
 #include "wipeable_string.h"
-#include "serialization/keyvalue_serialization.h"
 #include <vector>
 
 namespace mms
@@ -44,9 +44,9 @@ namespace mms
 
 struct transport_message_t
 {
-  cryptonote::account_public_address source_monero_address;
+  cryptonote::account_public_address source_klaro_address;
   std::string source_transport_address;
-  cryptonote::account_public_address destination_monero_address;
+  cryptonote::account_public_address destination_klaro_address;
   std::string destination_transport_address;
   crypto::chacha_iv iv;
   crypto::public_key encryption_public_key;
@@ -61,9 +61,9 @@ struct transport_message_t
   std::string transport_id;
 
   BEGIN_KV_SERIALIZE_MAP()
-    KV_SERIALIZE(source_monero_address)
+    KV_SERIALIZE(source_klaro_address)
     KV_SERIALIZE(source_transport_address)
-    KV_SERIALIZE(destination_monero_address)
+    KV_SERIALIZE(destination_klaro_address)
     KV_SERIALIZE(destination_transport_address)
     KV_SERIALIZE_VAL_POD_AS_BLOB(iv)
     KV_SERIALIZE_VAL_POD_AS_BLOB(encryption_public_key)
@@ -83,7 +83,7 @@ typedef epee::misc_utils::struct_init<transport_message_t> transport_message;
 class message_transporter
 {
 public:
-  message_transporter();
+  message_transporter(std::unique_ptr<epee::net_utils::http::abstract_http_client> http_client);
   void set_options(const std::string &bitmessage_address, const epee::wipeable_string &bitmessage_login);
   bool send_message(const transport_message &message);
   bool receive_messages(const std::vector<std::string> &destination_transport_addresses,
@@ -94,7 +94,7 @@ public:
   bool delete_transport_address(const std::string &transport_address);
 
 private:
-  epee::net_utils::http::http_simple_client m_http_client;
+  const std::unique_ptr<epee::net_utils::http::abstract_http_client> m_http_client;
   std::string m_bitmessage_url;
   epee::wipeable_string m_bitmessage_login;
   std::atomic<bool> m_run;

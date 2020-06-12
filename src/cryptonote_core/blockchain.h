@@ -1017,6 +1017,11 @@ namespace cryptonote
      */
     bool has_block_weights(uint64_t height, uint64_t nblocks) const;
 
+    /**
+     * @brief flush the invalid blocks set
+     */
+    void flush_invalid_blocks();
+
 #ifndef IN_UNIT_TESTS
   private:
 #endif
@@ -1207,10 +1212,11 @@ namespace cryptonote
      *
      * @param bl the block to be added
      * @param bvc metadata concerning the block's validity
+     * @param notify if set to true, sends new block notification on success
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc);
+    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify = true);
 
     /**
      * @brief validate and add a new block to the end of the blockchain
@@ -1222,10 +1228,11 @@ namespace cryptonote
      * @param bl the block to be added
      * @param id the hash of the block
      * @param bvc metadata concerning the block's validity
+     * @param notify if set to true, sends new block notification on success
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc);
+    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, bool notify = true);
 
     /**
      * @brief validate and add a new block to an alternate blockchain
@@ -1462,7 +1469,7 @@ namespace cryptonote
      * @brief loads block hashes from compiled-in data set
      *
      * A (possibly empty) set of block hashes can be compiled into the
-     * monero daemon binary.  This function loads those hashes into
+     * klaro daemon binary.  This function loads those hashes into
      * a useful state.
      * 
      * @param get_checkpoints if set, will be called to get checkpoints data

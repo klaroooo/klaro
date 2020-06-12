@@ -29,7 +29,7 @@
 set(gen_ssl_cert_sources
   gen_ssl_cert.cpp)
 
-monero_add_executable(gen_ssl_cert
+klaro_add_executable(gen_ssl_cert
   ${gen_ssl_cert_sources})
 target_link_libraries(gen_ssl_cert
   PRIVATE

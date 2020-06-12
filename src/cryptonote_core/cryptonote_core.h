@@ -45,7 +45,6 @@
 #include "blockchain.h"
 #include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
-#include "cryptonote_basic/cryptonote_stat_info.h"
 #include "warnings.h"
 #include "crypto/hash.h"
 #include "span.h"
@@ -470,10 +469,11 @@ namespace cryptonote
 
      /**
       * @copydoc tx_memory_pool::get_txpool_backlog
+      * @param include_sensitive_txes include private transactions
       *
       * @note see tx_memory_pool::get_txpool_backlog
       */
-     bool get_txpool_backlog(std::vector<tx_backlog_entry>& backlog) const;
+     bool get_txpool_backlog(std::vector<tx_backlog_entry>& backlog, bool include_sensitive_txes = false) const;
      
      /**
       * @copydoc tx_memory_pool::get_transactions
@@ -515,10 +515,11 @@ namespace cryptonote
 
      /**
       * @copydoc tx_memory_pool::get_transactions_count
+      * @param include_sensitive_txes include private transactions
       *
       * @note see tx_memory_pool::get_transactions_count
       */
-     size_t get_pool_transactions_count() const;
+     size_t get_pool_transactions_count(bool include_sensitive_txes = false) const;
 
      /**
       * @copydoc Blockchain::get_total_transactions
@@ -554,15 +555,6 @@ namespace cryptonote
       * @note see Blockchain::find_blockchain_supplement(const uint64_t, const std::list<crypto::hash>&, std::vector<std::pair<cryptonote::blobdata, std::vector<transaction> > >&, uint64_t&, uint64_t&, size_t) const
       */
      bool find_blockchain_supplement(const uint64_t req_start_block, const std::list<crypto::hash>& qblock_ids, std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > >& blocks, uint64_t& total_height, uint64_t& start_height, bool pruned, bool get_miner_tx_hash, size_t max_count) const;
-
-     /**
-      * @brief gets some stats about the daemon
-      *
-      * @param st_inf return-by-reference container for the stats requested
-      *
-      * @return true
-      */
-     bool get_stat_info(core_stat_info& st_inf) const;
 
      /**
       * @copydoc Blockchain::get_tx_outputs_gindexs
@@ -707,7 +699,7 @@ namespace cryptonote
       *
       * @note see Blockchain::update_checkpoints()
       */
-     bool update_checkpoints();
+     bool update_checkpoints(const bool skip_dns = false);
 
      /**
       * @brief tells the daemon to wind down operations and stop running
@@ -765,7 +757,7 @@ namespace cryptonote
       *
       * @return the number of blocks to sync in one go
       */
-     std::pair<uint64_t, uint64_t> get_coinbase_tx_sum(const uint64_t start_offset, const size_t count);
+     std::pair<boost::multiprecision::uint128_t, boost::multiprecision::uint128_t> get_coinbase_tx_sum(const uint64_t start_offset, const size_t count);
      
      /**
       * @brief get the network type we're on
@@ -790,13 +782,6 @@ namespace cryptonote
       * @return whether fluffy blocks are enabled
       */
      bool fluffy_blocks_enabled() const { return m_fluffy_blocks_enabled; }
-
-     /**
-      * @brief get whether transaction relay should be padded
-      *
-      * @return whether transaction relay should be padded
-      */
-     bool pad_transactions() const { return m_pad_transactions; }
 
      /**
       * @brief check a set of hashes against the precompiled hash set
@@ -865,6 +850,20 @@ namespace cryptonote
       * @brief flushes the bad txs cache
       */
      void flush_bad_txs_cache();
+
+     /**
+      * @brief flushes the invalid block cache
+      */
+     void flush_invalid_blocks();
+
+     /**
+      * @brief returns the set of transactions in the txpool which are not in the argument
+      *
+      * @param hashes hashes of transactions to exclude from the result
+      *
+      * @return true iff success, false otherwise
+      */
+     bool get_txpool_complement(const std::vector<crypto::hash> &hashes, std::vector<cryptonote::blobdata> &txes);
 
    private:
 
@@ -1002,18 +1001,6 @@ namespace cryptonote
      bool check_tx_inputs_keyimages_domain(const transaction& tx) const;
 
      /**
-      * @brief checks HardFork status and prints messages about it
-      *
-      * Checks the status of HardFork and logs/prints if an update to
-      * the daemon is necessary.
-      *
-      * @note see Blockchain::get_hard_fork_state and HardFork::State
-      *
-      * @return true
-      */
-     bool check_fork_time();
-
-     /**
       * @brief attempts to relay any transactions in the mempool which need it
       *
       * @return true
@@ -1102,7 +1089,6 @@ namespace cryptonote
 
      bool m_fluffy_blocks_enabled;
      bool m_offline;
-     bool m_pad_transactions;
 
      std::shared_ptr<tools::Notify> m_block_rate_notify;
    };

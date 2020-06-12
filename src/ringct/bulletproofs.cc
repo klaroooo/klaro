@@ -100,8 +100,8 @@ static inline bool is_reduced(const rct::key &scalar)
 
 static rct::key get_exponent(const rct::key &base, size_t idx)
 {
-  static const std::string salt("bulletproof");
-  std::string hashed = std::string((const char*)base.bytes, sizeof(base)) + salt + tools::get_varint_data(idx);
+  static const std::string domain_separator(config::HASH_KEY_BULLETPROOF_EXPONENT);
+  std::string hashed = std::string((const char*)base.bytes, sizeof(base)) + domain_separator + tools::get_varint_data(idx);
   rct::key e;
   ge_p3 e_p3;
   rct::hash_to_p3(e_p3, rct::hash2rct(crypto::cn_fast_hash(hashed.data(), hashed.size())));
@@ -173,7 +173,7 @@ static rct::key cross_vector_exponent8(size_t size, const std::vector<ge_p3> &A,
   multiexp_data.resize(size*2 + (!!extra_point));
   for (size_t i = 0; i < size; ++i)
   {
-    sc_mul(multiexp_data[i*2].scalar.bytes, a[ao+i].bytes, INV_EIGHT.bytes);;
+    sc_mul(multiexp_data[i*2].scalar.bytes, a[ao+i].bytes, INV_EIGHT.bytes);
     multiexp_data[i*2].point = A[Ao+i];
     sc_mul(multiexp_data[i*2+1].scalar.bytes, b[bo+i].bytes, INV_EIGHT.bytes);
     if (scale)
@@ -905,7 +905,7 @@ bool bulletproof_VERIFY(const std::vector<const Bulletproof*> &proofs)
   rct::key m_y0 = rct::zero(), y1 = rct::zero();
   int proof_data_index = 0;
   rct::keyV w_cache;
-  rct::keyV proof8_V, proof8_L, proof8_R;
+  std::vector<ge_p3> proof8_V, proof8_L, proof8_R;
   for (const Bulletproof *p: proofs)
   {
     const Bulletproof &proof = *p;
@@ -918,13 +918,17 @@ bool bulletproof_VERIFY(const std::vector<const Bulletproof*> &proofs)
     const rct::key weight_z = rct::skGen();
 
     // pre-multiply some points by 8
-    proof8_V.resize(proof.V.size()); for (size_t i = 0; i < proof.V.size(); ++i) proof8_V[i] = rct::scalarmult8(proof.V[i]);
-    proof8_L.resize(proof.L.size()); for (size_t i = 0; i < proof.L.size(); ++i) proof8_L[i] = rct::scalarmult8(proof.L[i]);
-    proof8_R.resize(proof.R.size()); for (size_t i = 0; i < proof.R.size(); ++i) proof8_R[i] = rct::scalarmult8(proof.R[i]);
-    rct::key proof8_T1 = rct::scalarmult8(proof.T1);
-    rct::key proof8_T2 = rct::scalarmult8(proof.T2);
-    rct::key proof8_S = rct::scalarmult8(proof.S);
-    rct::key proof8_A = rct::scalarmult8(proof.A);
+    proof8_V.resize(proof.V.size()); for (size_t i = 0; i < proof.V.size(); ++i) rct::scalarmult8(proof8_V[i], proof.V[i]);
+    proof8_L.resize(proof.L.size()); for (size_t i = 0; i < proof.L.size(); ++i) rct::scalarmult8(proof8_L[i], proof.L[i]);
+    proof8_R.resize(proof.R.size()); for (size_t i = 0; i < proof.R.size(); ++i) rct::scalarmult8(proof8_R[i], proof.R[i]);
+    ge_p3 proof8_T1;
+    ge_p3 proof8_T2;
+    ge_p3 proof8_S;
+    ge_p3 proof8_A;
+    rct::scalarmult8(proof8_T1, proof.T1);
+    rct::scalarmult8(proof8_T2, proof.T2);
+    rct::scalarmult8(proof8_S, proof.S);
+    rct::scalarmult8(proof8_A, proof.A);
 
     PERF_TIMER_START_BP(VERIFY_line_61);
     sc_mulsub(m_y0.bytes, proof.taux.bytes, weight_y.bytes, m_y0.bytes);

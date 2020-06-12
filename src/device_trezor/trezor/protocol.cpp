@@ -145,7 +145,8 @@ namespace ki {
 
   bool key_image_data(wallet_shim * wallet,
                       const std::vector<tools::wallet2::transfer_details> & transfers,
-                      std::vector<MoneroTransferDetails> & res)
+                      std::vector<MoneroTransferDetails> & res,
+                      bool need_all_additionals)
   {
     for(auto & td : transfers){
       ::crypto::public_key tx_pub_key = wallet->get_tx_pub_key_from_received_outs(td);
@@ -157,8 +158,14 @@ namespace ki {
       cres.set_out_key(key_to_string(boost::get<cryptonote::txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key));
       cres.set_tx_pub_key(key_to_string(tx_pub_key));
       cres.set_internal_output_index(td.m_internal_output_index);
-      for(auto & aux : additional_tx_pub_keys){
-        cres.add_additional_tx_pub_keys(key_to_string(aux));
+      cres.set_sub_addr_major(td.m_subaddr_index.major);
+      cres.set_sub_addr_minor(td.m_subaddr_index.minor);
+      if (need_all_additionals) {
+        for (auto &aux : additional_tx_pub_keys) {
+          cres.add_additional_tx_pub_keys(key_to_string(aux));
+        }
+      } else if (!additional_tx_pub_keys.empty() && additional_tx_pub_keys.size() > td.m_internal_output_index) {
+        cres.add_additional_tx_pub_keys(key_to_string(additional_tx_pub_keys[td.m_internal_output_index]));
       }
     }
 
@@ -188,9 +195,10 @@ namespace ki {
 
   void generate_commitment(std::vector<MoneroTransferDetails> & mtds,
                            const std::vector<tools::wallet2::transfer_details> & transfers,
-                           std::shared_ptr<messages::monero::MoneroKeyImageExportInitRequest> & req)
+                           std::shared_ptr<messages::klaro::MoneroKeyImageExportInitRequest> & req,
+                           bool need_subaddr_indices)
   {
-    req = std::make_shared<messages::monero::MoneroKeyImageExportInitRequest>();
+    req = std::make_shared<messages::klaro::MoneroKeyImageExportInitRequest>();
 
     KECCAK_CTX kck;
     uint8_t final_hash[32];
@@ -202,7 +210,7 @@ namespace ki {
     }
     keccak_finish(&kck, final_hash);
 
-    req = std::make_shared<messages::monero::MoneroKeyImageExportInitRequest>();
+    req = std::make_shared<messages::klaro::MoneroKeyImageExportInitRequest>();
     req->set_hash(std::string(reinterpret_cast<const char*>(final_hash), 32));
     req->set_num(transfers.size());
 
@@ -213,18 +221,20 @@ namespace ki {
       st.insert(cur.m_subaddr_index.minor);
     }
 
-    for (auto& x: sub_indices){
-      auto subs = req->add_subs();
-      subs->set_account(x.first);
-      for(auto minor : x.second){
-        subs->add_minor_indices(minor);
+    if (need_subaddr_indices) {
+      for (auto &x: sub_indices) {
+        auto subs = req->add_subs();
+        subs->set_account(x.first);
+        for (auto minor : x.second) {
+          subs->add_minor_indices(minor);
+        }
       }
     }
   }
 
   void live_refresh_ack(const ::crypto::secret_key & view_key_priv,
                         const ::crypto::public_key& out_key,
-                        const std::shared_ptr<messages::monero::MoneroLiveRefreshStepAck> & ack,
+                        const std::shared_ptr<messages::klaro::MoneroLiveRefreshStepAck> & ack,
                         ::cryptonote::keypair& in_ephemeral,
                         ::crypto::key_image& ki)
   {
@@ -281,26 +291,6 @@ namespace tx {
     dst->set_is_integrated(src->is_integrated);
     dst->set_original(src->original);
     translate_address(dst->mutable_addr(), &(src->addr));
-  }
-
-  void translate_src_entry(MoneroTransactionSourceEntry * dst, const cryptonote::tx_source_entry * src){
-    for(auto & cur : src->outputs){
-      auto out = dst->add_outputs();
-      out->set_idx(cur.first);
-      translate_rct_key(out->mutable_key(), &(cur.second));
-    }
-
-    dst->set_real_output(src->real_output);
-    dst->set_real_out_tx_key(key_to_string(src->real_out_tx_key));
-    for(auto & cur : src->real_out_additional_tx_keys){
-      dst->add_real_out_additional_tx_keys(key_to_string(cur));
-    }
-
-    dst->set_real_output_in_tx_index(src->real_output_in_tx_index);
-    dst->set_amount(src->amount);
-    dst->set_rct(src->rct);
-    dst->set_mask(key_to_string(src->mask));
-    translate_klrki(dst->mutable_multisig_klrki(), &(src->multisig_kLRki));
   }
 
   void translate_klrki(MoneroMultisigKLRki * dst, const rct::multisig_kLRki * src){
@@ -369,6 +359,31 @@ namespace tx {
     return res;
   }
 
+  std::string compute_sealing_key(const std::string & master_key, size_t idx, bool is_iv)
+  {
+    // master-key-32B || domain-sep-12B || index-4B
+    uint8_t hash[32] = {0};
+    KECCAK_CTX ctx;
+    std::string sep = is_iv ? "sig-iv" : "sig-key";
+    std::string idx_data = tools::get_varint_data(idx);
+    if (idx_data.size() > 4){
+      throw std::invalid_argument("index is too big");
+    }
+
+    keccak_init(&ctx);
+    keccak_update(&ctx, (const uint8_t *) master_key.data(), master_key.size());
+    keccak_update(&ctx, (const uint8_t *) sep.data(), sep.size());
+    keccak_update(&ctx, hash, 12 - sep.size());
+    keccak_update(&ctx, (const uint8_t *) idx_data.data(), idx_data.size());
+    if (idx_data.size() < 4) {
+      keccak_update(&ctx, hash, 4 - idx_data.size());
+    }
+
+    keccak_finish(&ctx, hash);
+    keccak(hash, sizeof(hash), hash, sizeof(hash));
+    return std::string((const char*) hash, 32);
+  }
+
   TData::TData() {
     rsig_type = 0;
     bp_version = 0;
@@ -383,7 +398,7 @@ namespace tx {
     m_unsigned_tx = unsigned_tx;
     m_aux_data = aux_data;
     m_tx_idx = tx_idx;
-    m_ct.tx_data = cur_tx();
+    m_ct.tx_data = cur_src_tx();
     m_multisig = false;
     m_client_version = 1;
   }
@@ -451,6 +466,41 @@ namespace tx {
     }
   }
 
+  void Signer::set_tx_input(MoneroTransactionSourceEntry * dst, size_t idx, bool need_ring_keys, bool need_ring_indices){
+    const cryptonote::tx_source_entry & src = cur_tx().sources[idx];
+    const tools::wallet2::transfer_details & transfer = get_source_transfer(idx);
+
+    dst->set_real_output(src.real_output);
+    for(size_t i = 0; i < src.outputs.size(); ++i){
+      auto & cur = src.outputs[i];
+      auto out = dst->add_outputs();
+
+      if (i == src.real_output || need_ring_indices || client_version() <= 1) {
+        out->set_idx(cur.first);
+      }
+      if (i == src.real_output || need_ring_keys || client_version() <= 1) {
+        translate_rct_key(out->mutable_key(), &(cur.second));
+      }
+    }
+
+    dst->set_real_out_tx_key(key_to_string(src.real_out_tx_key));
+    dst->set_real_output_in_tx_index(src.real_output_in_tx_index);
+
+    if (client_version() <= 1) {
+      for (auto &cur : src.real_out_additional_tx_keys) {
+        dst->add_real_out_additional_tx_keys(key_to_string(cur));
+      }
+    } else if (!src.real_out_additional_tx_keys.empty()) {
+      dst->add_real_out_additional_tx_keys(key_to_string(src.real_out_additional_tx_keys.at(src.real_output_in_tx_index)));
+    }
+
+    dst->set_amount(src.amount);
+    dst->set_rct(src.rct);
+    dst->set_mask(key_to_string(src.mask));
+    translate_klrki(dst->mutable_multisig_klrki(), &(src.multisig_kLRki));
+    dst->set_subaddr_minor(transfer.m_subaddr_index.minor);
+  }
+
   void Signer::compute_integrated_indices(TsxData * tsx_data){
     if (m_aux_data == nullptr || m_aux_data->tx_recipients.empty()){
       return;
@@ -488,10 +538,11 @@ namespace tx {
     }
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionInitRequest> Signer::step_init(){
+  std::shared_ptr<messages::klaro::MoneroTransactionInitRequest> Signer::step_init(){
     // extract payment ID from construction data
     auto & tsx_data = m_ct.tsx_data;
     auto & tx = cur_tx();
+    const size_t input_size = tx.sources.size();
 
     m_ct.tx.version = 2;
     m_ct.tx.unlock_time = tx.unlock_time;
@@ -500,12 +551,20 @@ namespace tx {
     tsx_data.set_version(1);
     tsx_data.set_client_version(client_version());
     tsx_data.set_unlock_time(tx.unlock_time);
-    tsx_data.set_num_inputs(static_cast<google::protobuf::uint32>(tx.sources.size()));
+    tsx_data.set_num_inputs(static_cast<google::protobuf::uint32>(input_size));
     tsx_data.set_mixin(static_cast<google::protobuf::uint32>(tx.sources[0].outputs.size() - 1));
     tsx_data.set_account(tx.subaddr_account);
-    tsx_data.set_monero_version(std::string(MONERO_VERSION) + "|" + MONERO_VERSION_TAG);
+    tsx_data.set_klaro_version(std::string(MONERO_VERSION) + "|" + MONERO_VERSION_TAG);
     tsx_data.set_hard_fork(m_aux_data->hard_fork ? m_aux_data->hard_fork.get() : 0);
-    assign_to_repeatable(tsx_data.mutable_minor_indices(), tx.subaddr_indices.begin(), tx.subaddr_indices.end());
+
+    if (client_version() <= 1){
+      assign_to_repeatable(tsx_data.mutable_minor_indices(), tx.subaddr_indices.begin(), tx.subaddr_indices.end());
+    }
+
+    // TODO: use HF_VERSION_CLSAG after CLSAG is merged
+    if (tsx_data.hard_fork() >= 13){
+      throw exc::ProtocolException("CLSAG is not yet implemented");
+    }
 
     // Rsig decision
     auto rsig_data = tsx_data.mutable_rsig_data();
@@ -525,6 +584,11 @@ namespace tx {
       translate_dst_entry(dst, &cur);
     }
 
+    m_ct.source_permutation.clear();
+    for (size_t n = 0; n < input_size; ++n){
+      m_ct.source_permutation.push_back(n);
+    }
+
     compute_integrated_indices(&tsx_data);
 
     int64_t fee = 0;
@@ -541,13 +605,13 @@ namespace tx {
     tsx_data.set_fee(static_cast<google::protobuf::uint64>(fee));
     this->extract_payment_id();
 
-    auto init_req = std::make_shared<messages::monero::MoneroTransactionInitRequest>();
+    auto init_req = std::make_shared<messages::klaro::MoneroTransactionInitRequest>();
     init_req->set_version(0);
     init_req->mutable_tsx_data()->CopyFrom(tsx_data);
     return init_req;
   }
 
-  void Signer::step_init_ack(std::shared_ptr<const messages::monero::MoneroTransactionInitAck> ack){
+  void Signer::step_init_ack(std::shared_ptr<const messages::klaro::MoneroTransactionInitAck> ack){
     if (ack->has_rsig_data()){
       m_ct.rsig_param = std::make_shared<MoneroRsigData>(ack->rsig_data());
     }
@@ -555,15 +619,15 @@ namespace tx {
     assign_from_repeatable(&(m_ct.tx_out_entr_hmacs), ack->hmacs().begin(), ack->hmacs().end());
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionSetInputRequest> Signer::step_set_input(size_t idx){
+  std::shared_ptr<messages::klaro::MoneroTransactionSetInputRequest> Signer::step_set_input(size_t idx){
     CHECK_AND_ASSERT_THROW_MES(idx < cur_tx().sources.size(), "Invalid source index");
     m_ct.cur_input_idx = idx;
-    auto res = std::make_shared<messages::monero::MoneroTransactionSetInputRequest>();
-    translate_src_entry(res->mutable_src_entr(), &(cur_tx().sources[idx]));
+    auto res = std::make_shared<messages::klaro::MoneroTransactionSetInputRequest>();
+    set_tx_input(res->mutable_src_entr(), idx, false, true);
     return res;
   }
 
-  void Signer::step_set_input_ack(std::shared_ptr<const messages::monero::MoneroTransactionSetInputAck> ack){
+  void Signer::step_set_input_ack(std::shared_ptr<const messages::klaro::MoneroTransactionSetInputAck> ack){
     auto & vini_str = ack->vini();
 
     cryptonote::txin_v vini;
@@ -581,11 +645,6 @@ namespace tx {
 
   void Signer::sort_ki(){
     const size_t input_size = cur_tx().sources.size();
-
-    m_ct.source_permutation.clear();
-    for (size_t n = 0; n < input_size; ++n){
-      m_ct.source_permutation.push_back(n);
-    }
 
     CHECK_AND_ASSERT_THROW_MES(m_ct.tx.vin.size() == input_size, "Invalid vector size");
     std::sort(m_ct.source_permutation.begin(), m_ct.source_permutation.end(), [&](const size_t i0, const size_t i1) {
@@ -612,79 +671,50 @@ namespace tx {
     });
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionInputsPermutationRequest> Signer::step_permutation(){
+  std::shared_ptr<messages::klaro::MoneroTransactionInputsPermutationRequest> Signer::step_permutation(){
     sort_ki();
+    if (client_version() >= 2){
+      return nullptr;
+    }
 
-    auto res = std::make_shared<messages::monero::MoneroTransactionInputsPermutationRequest>();
+    auto res = std::make_shared<messages::klaro::MoneroTransactionInputsPermutationRequest>();
     assign_to_repeatable(res->mutable_perm(), m_ct.source_permutation.begin(), m_ct.source_permutation.end());
 
     return res;
   }
 
-  void Signer::step_permutation_ack(std::shared_ptr<const messages::monero::MoneroTransactionInputsPermutationAck> ack){
+  void Signer::step_permutation_ack(std::shared_ptr<const messages::klaro::MoneroTransactionInputsPermutationAck> ack){
 
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionInputViniRequest> Signer::step_set_vini_input(size_t idx){
+  std::shared_ptr<messages::klaro::MoneroTransactionInputViniRequest> Signer::step_set_vini_input(size_t idx){
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.tx_data.sources.size(), "Invalid transaction index");
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.tx.vin.size(), "Invalid transaction index");
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.tx_in_hmacs.size(), "Invalid transaction index");
 
     m_ct.cur_input_idx = idx;
     auto tx = m_ct.tx_data;
-    auto res = std::make_shared<messages::monero::MoneroTransactionInputViniRequest>();
+    auto res = std::make_shared<messages::klaro::MoneroTransactionInputViniRequest>();
     auto & vini = m_ct.tx.vin[idx];
-    translate_src_entry(res->mutable_src_entr(), &(tx.sources[idx]));
+    set_tx_input(res->mutable_src_entr(), idx, false, false);
     res->set_vini(cryptonote::t_serializable_object_to_blob(vini));
     res->set_vini_hmac(m_ct.tx_in_hmacs[idx]);
-
-    if (client_version() == 0) {
-      CHECK_AND_ASSERT_THROW_MES(idx < m_ct.pseudo_outs.size(), "Invalid transaction index");
-      CHECK_AND_ASSERT_THROW_MES(idx < m_ct.pseudo_outs_hmac.size(), "Invalid transaction index");
-      res->set_pseudo_out(m_ct.pseudo_outs[idx]);
-      res->set_pseudo_out_hmac(m_ct.pseudo_outs_hmac[idx]);
-    }
-
+    res->set_orig_idx(m_ct.source_permutation[idx]);
     return res;
   }
 
-  void Signer::step_set_vini_input_ack(std::shared_ptr<const messages::monero::MoneroTransactionInputViniAck> ack){
+  void Signer::step_set_vini_input_ack(std::shared_ptr<const messages::klaro::MoneroTransactionInputViniAck> ack){
 
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionAllInputsSetRequest> Signer::step_all_inputs_set(){
-    return std::make_shared<messages::monero::MoneroTransactionAllInputsSetRequest>();
+  std::shared_ptr<messages::klaro::MoneroTransactionAllInputsSetRequest> Signer::step_all_inputs_set(){
+    return std::make_shared<messages::klaro::MoneroTransactionAllInputsSetRequest>();
   }
 
-  void Signer::step_all_inputs_set_ack(std::shared_ptr<const messages::monero::MoneroTransactionAllInputsSetAck> ack){
-    if (client_version() > 0 || !is_offloading()){
-      return;
-    }
-
-    // If offloading, expect rsig configuration.
-    if (!ack->has_rsig_data()){
-      throw exc::ProtocolException("Rsig offloading requires rsig param");
-    }
-
-    auto & rsig_data = ack->rsig_data();
-    if (!rsig_data.has_mask()){
-      throw exc::ProtocolException("Gamma masks not present in offloaded version");
-    }
-
-    auto & mask = rsig_data.mask();
-    if (mask.size() != 32 * num_outputs()){
-      throw exc::ProtocolException("Invalid number of gamma masks");
-    }
-
-    m_ct.rsig_gamma.reserve(num_outputs());
-    for(size_t c=0; c < num_outputs(); ++c){
-      rct::key cmask{};
-      memcpy(cmask.bytes, mask.data() + c * 32, 32);
-      m_ct.rsig_gamma.emplace_back(cmask);
-    }
+  void Signer::step_all_inputs_set_ack(std::shared_ptr<const messages::klaro::MoneroTransactionAllInputsSetAck> ack){
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionSetOutputRequest> Signer::step_set_output(size_t idx){
+  std::shared_ptr<messages::klaro::MoneroTransactionSetOutputRequest> Signer::step_set_output(size_t idx){
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.tx_data.splitted_dsts.size(), "Invalid transaction index");
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.tx_out_entr_hmacs.size(), "Invalid transaction index");
     CHECK_AND_ASSERT_THROW_MES(is_req_bulletproof(), "Borromean rsig not supported");
@@ -692,23 +722,14 @@ namespace tx {
     m_ct.cur_output_idx = idx;
     m_ct.cur_output_in_batch_idx += 1;   // assumes sequential call to step_set_output()
 
-    auto res = std::make_shared<messages::monero::MoneroTransactionSetOutputRequest>();
+    auto res = std::make_shared<messages::klaro::MoneroTransactionSetOutputRequest>();
     auto & cur_dst = m_ct.tx_data.splitted_dsts[idx];
     translate_dst_entry(res->mutable_dst_entr(), &cur_dst);
     res->set_dst_entr_hmac(m_ct.tx_out_entr_hmacs[idx]);
-
-    // Range sig offloading to the host
-    // ClientV0 sends offloaded BP with the last message in the batch.
-    // ClientV1 needs additional message after the last message in the batch as BP uses deterministic masks.
-    if (client_version() == 0 && is_offloading() && should_compute_bp_now()) {
-      auto rsig_data = res->mutable_rsig_data();
-      compute_bproof(*rsig_data);
-    }
-
     return res;
   }
 
-  void Signer::step_set_output_ack(std::shared_ptr<const messages::monero::MoneroTransactionSetOutputAck> ack){
+  void Signer::step_set_output_ack(std::shared_ptr<const messages::klaro::MoneroTransactionSetOutputAck> ack){
     cryptonote::tx_out tx_out;
     rct::Bulletproof bproof{};
     rct::ctkey out_pk{};
@@ -774,7 +795,7 @@ namespace tx {
     return m_ct.grouping_vct[m_ct.cur_batch_idx] <= m_ct.cur_output_in_batch_idx;
   }
 
-  void Signer::compute_bproof(messages::monero::MoneroTransactionRsigData & rsig_data){
+  void Signer::compute_bproof(messages::klaro::MoneroTransactionRsigData & rsig_data){
     auto batch_size = m_ct.grouping_vct[m_ct.cur_batch_idx];
     std::vector<uint64_t> amounts;
     rct::keyV masks;
@@ -813,12 +834,12 @@ namespace tx {
     }
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionSetOutputRequest> Signer::step_rsig(size_t idx){
-    if (client_version() == 0 || !is_offloading() || !should_compute_bp_now()){
+  std::shared_ptr<messages::klaro::MoneroTransactionSetOutputRequest> Signer::step_rsig(size_t idx){
+    if (!is_offloading() || !should_compute_bp_now()){
       return nullptr;
     }
 
-    auto res = std::make_shared<messages::monero::MoneroTransactionSetOutputRequest>();
+    auto res = std::make_shared<messages::klaro::MoneroTransactionSetOutputRequest>();
     auto & cur_dst = m_ct.tx_data.splitted_dsts[idx];
     translate_dst_entry(res->mutable_dst_entr(), &cur_dst);
     res->set_dst_entr_hmac(m_ct.tx_out_entr_hmacs[idx]);
@@ -828,16 +849,16 @@ namespace tx {
     return res;
   }
 
-  void Signer::step_set_rsig_ack(std::shared_ptr<const messages::monero::MoneroTransactionSetOutputAck> ack){
+  void Signer::step_set_rsig_ack(std::shared_ptr<const messages::klaro::MoneroTransactionSetOutputAck> ack){
     m_ct.cur_batch_idx += 1;
     m_ct.cur_output_in_batch_idx = 0;
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionAllOutSetRequest> Signer::step_all_outs_set(){
-    return std::make_shared<messages::monero::MoneroTransactionAllOutSetRequest>();
+  std::shared_ptr<messages::klaro::MoneroTransactionAllOutSetRequest> Signer::step_all_outs_set(){
+    return std::make_shared<messages::klaro::MoneroTransactionAllOutSetRequest>();
   }
 
-  void Signer::step_all_outs_set_ack(std::shared_ptr<const messages::monero::MoneroTransactionAllOutSetAck> ack, hw::device &hwdev){
+  void Signer::step_all_outs_set_ack(std::shared_ptr<const messages::klaro::MoneroTransactionAllOutSetAck> ack, hw::device &hwdev){
     m_ct.rv = std::make_shared<rct::rctSig>();
     m_ct.rv->txnFee = ack->rv().txn_fee();
     m_ct.rv->type = static_cast<uint8_t>(ack->rv().rv_type());
@@ -907,7 +928,7 @@ namespace tx {
     }
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionSignInputRequest> Signer::step_sign_input(size_t idx){
+  std::shared_ptr<messages::klaro::MoneroTransactionSignInputRequest> Signer::step_sign_input(size_t idx){
     m_ct.cur_input_idx = idx;
 
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.tx_data.sources.size(), "Invalid transaction index");
@@ -916,12 +937,13 @@ namespace tx {
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.alphas.size(), "Invalid transaction index");
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.spend_encs.size(), "Invalid transaction index");
 
-    auto res = std::make_shared<messages::monero::MoneroTransactionSignInputRequest>();
-    translate_src_entry(res->mutable_src_entr(), &(m_ct.tx_data.sources[idx]));
+    auto res = std::make_shared<messages::klaro::MoneroTransactionSignInputRequest>();
+    set_tx_input(res->mutable_src_entr(), idx, true, true);
     res->set_vini(cryptonote::t_serializable_object_to_blob(m_ct.tx.vin[idx]));
     res->set_vini_hmac(m_ct.tx_in_hmacs[idx]);
     res->set_pseudo_out_alpha(m_ct.alphas[idx]);
     res->set_spend_key(m_ct.spend_encs[idx]);
+    res->set_orig_idx(m_ct.source_permutation[idx]);
 
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.pseudo_outs.size(), "Invalid transaction index");
     CHECK_AND_ASSERT_THROW_MES(idx < m_ct.pseudo_outs_hmac.size(), "Invalid transaction index");
@@ -930,11 +952,8 @@ namespace tx {
     return res;
   }
 
-  void Signer::step_sign_input_ack(std::shared_ptr<const messages::monero::MoneroTransactionSignInputAck> ack){
-    rct::mgSig mg;
-    if (!cn_deserialize(ack->signature(), mg)){
-      throw exc::ProtocolException("Cannot deserialize mg[i]");
-    }
+  void Signer::step_sign_input_ack(std::shared_ptr<const messages::klaro::MoneroTransactionSignInputAck> ack){
+    m_ct.signatures.push_back(ack->signature());
 
     // Sync updated pseudo_outputs, client_version>=1, HF10+
     if (client_version() >= 1 && ack->has_pseudo_out()){
@@ -948,16 +967,13 @@ namespace tx {
         string_to_key(m_ct.rv->pseudoOuts[m_ct.cur_input_idx], ack->pseudo_out());
       }
     }
-
-    m_ct.rv->p.MGs.push_back(mg);
   }
 
-  std::shared_ptr<messages::monero::MoneroTransactionFinalRequest> Signer::step_final(){
-    m_ct.tx.rct_signatures = *(m_ct.rv);
-    return std::make_shared<messages::monero::MoneroTransactionFinalRequest>();
+  std::shared_ptr<messages::klaro::MoneroTransactionFinalRequest> Signer::step_final(){
+    return std::make_shared<messages::klaro::MoneroTransactionFinalRequest>();
   }
 
-  void Signer::step_final_ack(std::shared_ptr<const messages::monero::MoneroTransactionFinalAck> ack){
+  void Signer::step_final_ack(std::shared_ptr<const messages::klaro::MoneroTransactionFinalAck> ack){
     if (m_multisig){
       auto & cout_key = ack->cout_key();
       for(auto & cur : m_ct.couts){
@@ -976,6 +992,42 @@ namespace tx {
     m_ct.enc_salt1 = ack->salt();
     m_ct.enc_salt2 = ack->rand_mult();
     m_ct.enc_keys = ack->tx_enc_keys();
+
+    // Opening the sealed signatures
+    if (client_version() >= 3){
+      if(!ack->has_opening_key()){
+        throw exc::ProtocolException("Client version 3+ requires sealed signatures");
+      }
+
+      for(size_t i = 0; i < m_ct.signatures.size(); ++i){
+        CHECK_AND_ASSERT_THROW_MES(m_ct.signatures[i].size() > crypto::chacha::TAG_SIZE, "Invalid signature size");
+        std::string nonce = compute_sealing_key(ack->opening_key(), i, true);
+        std::string key = compute_sealing_key(ack->opening_key(), i, false);
+        size_t plen = m_ct.signatures[i].size() - crypto::chacha::TAG_SIZE;
+        std::unique_ptr<uint8_t[]> plaintext(new uint8_t[plen]);
+        uint8_t * buff = plaintext.get();
+
+        protocol::crypto::chacha::decrypt(
+            m_ct.signatures[i].data(),
+            m_ct.signatures[i].size(),
+            reinterpret_cast<const uint8_t *>(key.data()),
+            reinterpret_cast<const uint8_t *>(nonce.data()),
+            reinterpret_cast<char *>(buff), &plen);
+        m_ct.signatures[i].assign(reinterpret_cast<const char *>(buff), plen);
+      }
+    }
+
+    // CLSAG support comes here once it is merged to the Monero
+    m_ct.rv->p.MGs.reserve(m_ct.signatures.size());
+    for(size_t i = 0; i < m_ct.signatures.size(); ++i) {
+      rct::mgSig mg;
+      if (!cn_deserialize(m_ct.signatures[i], mg)) {
+        throw exc::ProtocolException("Cannot deserialize mg[i]");
+      }
+      m_ct.rv->p.MGs.push_back(mg);
+    }
+
+    m_ct.tx.rct_signatures = *(m_ct.rv);
   }
 
   std::string Signer::store_tx_aux_info(){
@@ -1038,10 +1090,10 @@ namespace tx {
     res.tx_prefix_hash = field_tx_prefix_hash;
   }
 
-  std::shared_ptr<messages::monero::MoneroGetTxKeyRequest> get_tx_key(
+  std::shared_ptr<messages::klaro::MoneroGetTxKeyRequest> get_tx_key(
       const hw::device_cold::tx_key_data_t & tx_data)
   {
-    auto req = std::make_shared<messages::monero::MoneroGetTxKeyRequest>();
+    auto req = std::make_shared<messages::klaro::MoneroGetTxKeyRequest>();
     req->set_salt1(tx_data.salt1);
     req->set_salt2(tx_data.salt2);
     req->set_tx_enc_keys(tx_data.tx_enc_keys);
@@ -1055,7 +1107,7 @@ namespace tx {
       std::vector<::crypto::secret_key> & tx_keys,
       const std::string & tx_prefix_hash,
       const ::crypto::secret_key & view_key_priv,
-      std::shared_ptr<const messages::monero::MoneroGetTxKeyAck> ack
+      std::shared_ptr<const messages::klaro::MoneroGetTxKeyAck> ack
   )
   {
     auto enc_key = protocol::tx::compute_enc_key(view_key_priv, tx_prefix_hash, ack->salt());

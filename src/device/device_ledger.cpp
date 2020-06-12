@@ -55,7 +55,10 @@ namespace hw {
     }
 
     #define TRACKD MTRACE("hw")
-    #define ASSERT_SW(sw,ok,msk) CHECK_AND_ASSERT_THROW_MES(((sw)&(mask))==(ok), "Wrong Device Status : SW=" << std::hex << (sw) << " (EXPECT=" << std::hex << (ok) << ", MASK=" << std::hex << (mask) << ")") ;
+    #define ASSERT_SW(sw,ok,msk) CHECK_AND_ASSERT_THROW_MES(((sw)&(mask))==(ok), \
+      "Wrong Device Status: " << "0x" << std::hex << (sw) << " (" << Status::to_string(sw) << "), " << \
+      "EXPECTED 0x" << std::hex << (ok) << " (" << Status::to_string(ok) << "), " << \
+      "MASK 0x" << std::hex << (mask));
     #define ASSERT_T0(exp)       CHECK_AND_ASSERT_THROW_MES(exp, "Protocol assert failure: "#exp ) ;
     #define ASSERT_X(exp,msg)    CHECK_AND_ASSERT_THROW_MES(exp, msg); 
 
@@ -63,6 +66,71 @@ namespace hw {
       crypto::secret_key dbg_viewkey;
       crypto::secret_key dbg_spendkey;
     #endif
+
+    struct Status
+    {
+      unsigned int code;
+      const char *string;
+
+      constexpr operator unsigned int() const
+      {
+        return this->code;
+      }
+
+      static const char *to_string(unsigned int code);
+    };
+
+    // Must be sorted in ascending order by the code
+    #define LEDGER_STATUS(status) {status, #status}
+    constexpr Status status_codes[] = {
+      LEDGER_STATUS(SW_BYTES_REMAINING_00),
+      LEDGER_STATUS(SW_WARNING_STATE_UNCHANGED),
+      LEDGER_STATUS(SW_STATE_TERMINATED),
+      LEDGER_STATUS(SW_MORE_DATA_AVAILABLE),
+      LEDGER_STATUS(SW_WRONG_LENGTH),
+      LEDGER_STATUS(SW_LOGICAL_CHANNEL_NOT_SUPPORTED),
+      LEDGER_STATUS(SW_SECURE_MESSAGING_NOT_SUPPORTED),
+      LEDGER_STATUS(SW_LAST_COMMAND_EXPECTED),
+      LEDGER_STATUS(SW_COMMAND_CHAINING_NOT_SUPPORTED),
+      LEDGER_STATUS(SW_SECURITY_LOAD_KEY),
+      LEDGER_STATUS(SW_SECURITY_COMMITMENT_CONTROL),
+      LEDGER_STATUS(SW_SECURITY_AMOUNT_CHAIN_CONTROL),
+      LEDGER_STATUS(SW_SECURITY_COMMITMENT_CHAIN_CONTROL),
+      LEDGER_STATUS(SW_SECURITY_OUTKEYS_CHAIN_CONTROL),
+      LEDGER_STATUS(SW_SECURITY_MAXOUTPUT_REACHED),
+      LEDGER_STATUS(SW_SECURITY_TRUSTED_INPUT),
+      LEDGER_STATUS(SW_CLIENT_NOT_SUPPORTED),
+      LEDGER_STATUS(SW_SECURITY_STATUS_NOT_SATISFIED),
+      LEDGER_STATUS(SW_FILE_INVALID),
+      LEDGER_STATUS(SW_PIN_BLOCKED),
+      LEDGER_STATUS(SW_DATA_INVALID),
+      LEDGER_STATUS(SW_CONDITIONS_NOT_SATISFIED),
+      LEDGER_STATUS(SW_COMMAND_NOT_ALLOWED),
+      LEDGER_STATUS(SW_APPLET_SELECT_FAILED),
+      LEDGER_STATUS(SW_WRONG_DATA),
+      LEDGER_STATUS(SW_FUNC_NOT_SUPPORTED),
+      LEDGER_STATUS(SW_FILE_NOT_FOUND),
+      LEDGER_STATUS(SW_RECORD_NOT_FOUND),
+      LEDGER_STATUS(SW_FILE_FULL),
+      LEDGER_STATUS(SW_INCORRECT_P1P2),
+      LEDGER_STATUS(SW_REFERENCED_DATA_NOT_FOUND),
+      LEDGER_STATUS(SW_WRONG_P1P2),
+      LEDGER_STATUS(SW_CORRECT_LENGTH_00),
+      LEDGER_STATUS(SW_INS_NOT_SUPPORTED),
+      LEDGER_STATUS(SW_CLA_NOT_SUPPORTED),
+      LEDGER_STATUS(SW_UNKNOWN),
+      LEDGER_STATUS(SW_OK),
+      LEDGER_STATUS(SW_ALGORITHM_UNSUPPORTED)
+    };
+
+    const char *Status::to_string(unsigned int code)
+    {
+      constexpr size_t status_codes_size = sizeof(status_codes) / sizeof(status_codes[0]);
+      constexpr const Status *status_codes_end = &status_codes[status_codes_size];
+
+      const Status *item = std::lower_bound(&status_codes[0], status_codes_end, code);
+      return (item == status_codes_end || code < *item) ? "UNKNOWN" : item->string;
+    }
 
     /* ===================================================================== */
     /* ===                        hmacmap                               ==== */
@@ -191,7 +259,7 @@ namespace hw {
 
     static int device_id = 0;
 
-    #define PROTOCOL_VERSION                    2
+    #define PROTOCOL_VERSION                    3
 
     #define INS_NONE                            0x00
     #define INS_RESET                           0x02
@@ -228,6 +296,7 @@ namespace hw {
     #define INS_BLIND                           0x78
     #define INS_UNBLIND                         0x7A
     #define INS_GEN_TXOUT_KEYS                  0x7B
+    #define INS_PREFIX_HASH                     0x7D
     #define INS_VALIDATE                        0x7C
     #define INS_MLSAG                           0x7E
     #define INS_CLOSE_TX                        0x80
@@ -1344,6 +1413,81 @@ namespace hw {
         log_hexbuffer("open_tx: [[OUT]] r ", r_x.data, 32);
         #endif
         return true;
+    }
+
+    void device_ledger::get_transaction_prefix_hash(const cryptonote::transaction_prefix& tx, crypto::hash& h) {
+      AUTO_LOCK_CMD();
+      
+      int pref_length = 0, pref_offset = 0, offset = 0;
+
+      #ifdef DEBUG_HWDEVICE
+      crypto::hash h_x;
+      this->controle_device->get_transaction_prefix_hash(tx,h_x);
+      MDEBUG("get_transaction_prefix_hash [[IN]] h_x/1 "<<h_x);
+      #endif
+    
+      std::ostringstream s_x;
+      binary_archive<true> a_x(s_x);
+      CHECK_AND_ASSERT_THROW_MES(::serialization::serialize(a_x, const_cast<cryptonote::transaction_prefix&>(tx)),
+                                 "unable to serialize transaction prefix");
+      pref_length = s_x.str().size();
+      //auto pref = std::make_unique<unsigned char[]>(pref_length);
+      auto uprt_pref = std::unique_ptr<unsigned char[]>{ new unsigned char[pref_length] };
+      unsigned char* pref = uprt_pref.get();
+      memmove(pref, s_x.str().data(), pref_length);
+
+      offset = set_command_header_noopt(INS_PREFIX_HASH,1);
+      pref_offset = 0;
+      unsigned char v;
+
+      //version as varint     
+      do {
+        v = pref[pref_offset];
+        this->buffer_send[offset] = v;
+        offset += 1;
+        pref_offset += 1;
+      } while (v&0x80);
+
+      //locktime as var int
+      do {
+        v = pref[pref_offset];
+        this->buffer_send[offset] = v;
+        offset += 1;
+        pref_offset += 1;
+      } while (v&0x80);
+
+      this->buffer_send[4] = offset-5;
+      this->length_send = offset;
+      this->exchange_wait_on_input();
+
+      //hash remains
+      int cnt = 0;
+      while (pref_offset < pref_length) {
+        int len;
+        cnt++;
+        offset = set_command_header(INS_PREFIX_HASH,2,cnt);      
+        len = pref_length - pref_offset;
+        //options
+        if (len > (BUFFER_SEND_SIZE-7)) {
+          len = BUFFER_SEND_SIZE-7;
+          this->buffer_send[offset] = 0x80;
+        } else {
+          this->buffer_send[offset] = 0x00;
+        }
+        offset += 1;
+        //send chunk
+        memmove(&this->buffer_send[offset], pref+pref_offset, len);
+        offset += len;
+        pref_offset += len;
+        this->buffer_send[4] = offset-5;
+        this->length_send = offset;
+        this->exchange();
+      }
+      memmove(h.data, &this->buffer_recv[0], 32);
+      
+      #ifdef DEBUG_HWDEVICE
+      hw::ledger::check8("prefix_hash", "h", h_x.data, h.data);
+      #endif
     }
 
     bool device_ledger::encrypt_payment_id(crypto::hash8 &payment_id, const crypto::public_key &public_key, const crypto::secret_key &secret_key) {

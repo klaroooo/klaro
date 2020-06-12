@@ -245,4 +245,4 @@ void TransactionHistoryImpl::refresh()
 
 } // namespace
 
-namespace Bitmonero = Monero;
+namespace Bitklaro = Monero;

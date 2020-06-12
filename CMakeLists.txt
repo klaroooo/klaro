@@ -46,7 +46,9 @@ endif()
 cmake_minimum_required(VERSION 2.8.7)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
-project(monero)
+project(klaro)
+
+include(FindCcache) # Has to be included after the project() macro, to be able to read the CXX variable.
 
 enable_language(C ASM)
 
@@ -182,6 +184,7 @@ if(BUILD_TAG)
 else()
   message(STATUS "Building without build tag")
 endif()
+
 
 
 set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG ${OPT_FLAGS_RELEASE}")
@@ -764,7 +767,7 @@ else()
     set(DEBUG_FLAGS "${DEBUG_FLAGS} -O0 ")
   endif()
 
-  # At least some CLANGs default to not enough for monero
+  # At least some CLANGs default to not enough for klaro
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=900")
 
   if(NOT DEFINED USE_LTO_DEFAULT)

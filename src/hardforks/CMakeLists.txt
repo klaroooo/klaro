@@ -34,9 +34,9 @@ set(hardforks_headers
 
 set(hardforks_private_headers)
 
-monero_private_headers(hardforks
+klaro_private_headers(hardforks
   ${hardforks_private_headers})
-monero_add_library(hardforks
+klaro_add_library(hardforks
   ${hardforks_sources}
   ${hardforks_headers}
   ${hardforks_private_headers})

@@ -31,6 +31,8 @@
 #include <algorithm>
 #include <boost/utility/string_ref.hpp>
 
+#include "misc_log_ex.h"
+
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "serialization"
 
@@ -157,7 +159,6 @@ namespace misc_utils
         while (fi != buf_end && ((lut[(uint8_t)*fi] & 32)) == 0)
           ++fi;
         val.assign(it, fi);
-        val.reserve(std::distance(star_end_string, buf_end));
         it = fi;
         for(;it != buf_end;it++)
         {

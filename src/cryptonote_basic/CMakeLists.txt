@@ -54,16 +54,15 @@ set(cryptonote_basic_private_headers
   cryptonote_basic_impl.h
   cryptonote_boost_serialization.h
   cryptonote_format_utils.h
-  cryptonote_stat_info.h
   difficulty.h
   hardfork.h
   miner.h
   tx_extra.h
   verification_context.h)
 
-monero_private_headers(cryptonote_basic
+klaro_private_headers(cryptonote_basic
   ${cryptonote_basic_private_headers})
-monero_add_library(cryptonote_basic
+klaro_add_library(cryptonote_basic
   ${cryptonote_basic_sources}
   ${cryptonote_basic_headers}
   ${cryptonote_basic_private_headers})

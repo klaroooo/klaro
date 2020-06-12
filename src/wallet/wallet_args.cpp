@@ -131,7 +131,7 @@ namespace wallet_args
     command_line::add_arg(desc_params, arg_max_concurrency);
     command_line::add_arg(desc_params, arg_config_file);
 
-    i18n_set_language("translations", "monero", lang);
+    i18n_set_language("translations", "klaro", lang);
 
     po::options_description desc_all;
     desc_all.add(desc_general).add(desc_params);

@@ -135,8 +135,8 @@ namespace cryptonote
   {
     std::map< uint64_t, crypto::hash >::const_iterator highest = 
         std::max_element( m_points.begin(), m_points.end(),
-                         ( boost::bind(&std::map< uint64_t, crypto::hash >::value_type::first, _1) < 
-                           boost::bind(&std::map< uint64_t, crypto::hash >::value_type::first, _2 ) ) );
+                         ( boost::bind(&std::map< uint64_t, crypto::hash >::value_type::first, boost::placeholders::_1) <
+                           boost::bind(&std::map< uint64_t, crypto::hash >::value_type::first, boost::placeholders::_2 ) ) );
     return highest->first;
   }
   //---------------------------------------------------------------------------
@@ -158,20 +158,33 @@ namespace cryptonote
   }
 
   bool checkpoints::init_default_checkpoints(network_type nettype)
-{
-  if (nettype == TESTNET) {
-    return true;  
-} 
-if (nettype == STAGENET) {
-    return true;  
-} 
-    
+  {
+    if (nettype == TESTNET)
+    {
+      ADD_CHECKPOINT(0,     "48ca7cd3c8de5b6a4d53d2861fbdaedca141553559f9be9520068053cda8430b");
+      ADD_CHECKPOINT(1000000, "46b690b710a07ea051bc4a6b6842ac37be691089c0f7758cfeec4d5fc0b4a258");
+      ADD_CHECKPOINT(1058600, "12904f6b4d9e60fd875674e07147d2c83d6716253f046af7b894c3e81da7e1bd");
+      return true;
+    }
+    if (nettype == STAGENET)
+    {
+      ADD_CHECKPOINT(0,       "76ee3cc98646292206cd3e86f74d88b4dcc1d937088645e9b0cbca84b7ce74eb");
+      ADD_CHECKPOINT(10000,   "1f8b0ce313f8b9ba9a46108bfd285c45ad7c2176871fd41c3a690d4830ce2fd5");
+      return true;
+    }
+    ADD_CHECKPOINT(25000,     "0efd5002802499823d05c9cf37be70507b46650b81c4693bde20cc95cf5da6a5");
+    ADD_CHECKPOINT(50000,     "2144245207732d5dcbfd90b67b7265c79b4cf3e6c8dd440860a4621e70ae337c");
+    ADD_CHECKPOINT(100000,    "b4381709536b7177c4164e6ce369d1616a6bf717b9b31fb0fa74e8dd44f326fd");
+    ADD_CHECKPOINT(150000,    "76a68bae15a4d577865674d9d8c0204477b4ef2ac0024fb38e0cca8e15b013bf");
+    ADD_CHECKPOINT(200000,    "51618bf0e5b3194404219d2e14c93a1f41b85a414a093a3cbf02cb88886d5f43");
+    ADD_CHECKPOINT(225000,    "2cac0d78e41851b6aac8642b3e9132819f4f53c49f63a79051b50f96177652a9");
+    ADD_CHECKPOINT(250000,    "43777ca7758a98a6c17be04b5d56ba5664e0b0bffcde90e55072b1bb2ee8e4cb");
+    ADD_CHECKPOINT(275000,    "653eee22f8d8f4512309070fc83444e44dfbfc7efd57a8d0dc46431d4f255206");
+    ADD_CHECKPOINT(305954,     "684d7c4361a8f251907e5c6c5876c2472d39f64f87669473725e33f524d49558");
+    return true;
+  }
 
-  return true;
-}
-
-bool checkpoints::load_checkpoints_from_json(const std::string &json_hashfile_fullpath)
-
+  bool checkpoints::load_checkpoints_from_json(const std::string &json_hashfile_fullpath)
   {
     boost::system::error_code errcode;
     if (! (boost::filesystem::exists(json_hashfile_fullpath, errcode)))
@@ -212,18 +225,19 @@ bool checkpoints::load_checkpoints_from_json(const std::string &json_hashfile_fu
     std::vector<std::string> records;
 
     // All four MoneroPulse domains have DNSSEC on and valid
-    static const std::vector<std::string> dns_urls = {
-};
+    static const std::vector<std::string> dns_urls = { 
+    };
 
+    static const std::vector<std::string> testnet_dns_urls = { "testpoints.klaropulse.se"
+							     , "testpoints.klaropulse.org"
+							     , "testpoints.klaropulse.net"
+							     , "testpoints.klaropulse.co"
+    };
 
-    static const std::vector<std::string> testnet_dns_urls = {
-};
-
-
-    static const std::vector<std::string> stagenet_dns_urls = { "stagenetpoints.moneropulse.se"
-                   , "stagenetpoints.moneropulse.org"
-                   , "stagenetpoints.moneropulse.net"
-                   , "stagenetpoints.moneropulse.co"
+    static const std::vector<std::string> stagenet_dns_urls = { "stagenetpoints.klaropulse.se"
+                   , "stagenetpoints.klaropulse.org"
+                   , "stagenetpoints.klaropulse.net"
+                   , "stagenetpoints.klaropulse.co"
     };
 
     if (!tools::dns_utils::load_txt_records_from_dns(records, nettype == TESTNET ? testnet_dns_urls : nettype == STAGENET ? stagenet_dns_urls : dns_urls))
@@ -272,6 +286,3 @@ bool checkpoints::load_checkpoints_from_json(const std::string &json_hashfile_fu
     return result;
   }
 }
-
-
-

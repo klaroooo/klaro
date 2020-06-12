@@ -34,9 +34,9 @@ set(serialization_headers)
 set(serialization_private_headers
   json_object.h)
 
-monero_private_headers(serialization
+klaro_private_headers(serialization
   ${serialization_private_headers})
-monero_add_library(serialization
+klaro_add_library(serialization
   ${serialization_sources}
   ${serialization_headers}
   ${serialization_private_headers})
@@ -44,6 +44,7 @@ target_link_libraries(serialization
   LINK_PRIVATE
     cryptonote_core
     cryptonote_protocol
+    epee
     ${Boost_CHRONO_LIBRARY}
     ${Boost_REGEX_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}

@@ -264,5 +264,5 @@ std::vector<std::string> PendingTransactionImpl::signersKeys() const {
 
 }
 
-namespace Bitmonero = Monero;
+namespace Bitklaro = Monero;
 

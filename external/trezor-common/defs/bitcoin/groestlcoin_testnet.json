@@ -6,6 +6,7 @@
   "github": "https://github.com/Groestlcoin/groestlcoin",
   "maintainer": "Yura Pakhuchiy <pakhuchiy@gmail.com>",
   "curve_name": "secp256k1_groestl",
+  "decimals": 8,
   "address_type": 111,
   "address_type_p2sh": 196,
   "maxfee_kb": 100000,
@@ -38,6 +39,8 @@
   "blockbook": [
     "https://blockbook-test.groestlcoin.org"
   ],
+  "negative_fee": false,
   "cooldown": 100,
-  "consensus_branch_id": null
+  "consensus_branch_id": null,
+  "confidential_assets": null
 }

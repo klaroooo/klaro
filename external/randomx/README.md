@@ -27,9 +27,9 @@ Between May and August 2019, RandomX was audited by 4 independent security resea
 * [Kudelski Security](https://www.kudelskisecurity.com/) (18 250 CHF)
 * [QuarksLab](https://quarkslab.com/en/) (52 800 USD)
 
-The first audit was generously funded by [Arweave](https://www.arweave.org/), one of the early adopters of RandomX. The remaining three audits were funded by donations from the [Monero community](https://ccs.getmonero.org/proposals/RandomX-audit.html). All four audits were coordinated by [OSTIF](https://ostif.org/).
+The first audit was generously funded by [Arweave](https://www.arweave.org/), one of the early adopters of RandomX. The remaining three audits were funded by donations from the [Monero community](https://ccs.getklaro.org/proposals/RandomX-audit.html). All four audits were coordinated by [OSTIF](https://ostif.org/).
 
-Final reports from all four audits are available in the [audits](audits/) directory. None of the audits found any critical vulnerabilities, but several changes in the algorithm and the code were made as a direct result of the audits. More details can be found in the [final report by OSTIF](https://ostif.org/four-audits-of-randomx-for-monero-and-arweave-have-been-completed-results/).
+Final reports from all four audits are available in the [audits](audits/) directory. None of the audits found any critical vulnerabilities, but several changes in the algorithm and the code were made as a direct result of the audits. More details can be found in the [final report by OSTIF](https://ostif.org/four-audits-of-randomx-for-klaro-and-arweave-have-been-completed-results/).
 
 ## Build
 
@@ -60,7 +60,7 @@ Precompiled `randomx-benchmark` binaries are available on the [Releases page](ht
 
 ## Proof of work
 
-RandomX was primarily designed as a PoW algorithm for [Monero](https://www.getmonero.org/). The recommended usage is following:
+RandomX was primarily designed as a PoW algorithm for [Monero](https://www.getklaro.org/). The recommended usage is following:
 
 * The key `K` is selected to be the hash of a block in the blockchain - this block is called the 'key block'. For optimal mining and verification performance, the key should change every 2048 blocks (~2.8 days) and there should be a delay of 64 blocks (~2 hours) between the key block and the change of the key `K`. This can be achieved by changing the key when `blockHeight % 2048 == 64` and selecting key block such that `keyBlockHeight % 2048 == 0`.
 * The input `H` is the standard hashing blob with a selected nonce value.

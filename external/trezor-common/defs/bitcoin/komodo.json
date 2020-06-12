@@ -6,6 +6,7 @@
   "github": "https://github.com/komodoplatform/komodo",
   "maintainer": "Kadan Stadelmann <ca333@komodoplatform.com>",
   "curve_name": "secp256k1",
+  "decimals": 8,
   "address_type": 60,
   "address_type_p2sh": 85,
   "maxfee_kb": 1000000,
@@ -36,11 +37,13 @@
     "https://api.kmd.dev"
   ],
   "blockbook": [],
+  "negative_fee": true,
   "cooldown": 100,
   "consensus_branch_id": {
     "1": 0,
     "2": 0,
     "3": 1537743641,
     "4": 1991772603
-  }
+  },
+  "confidential_assets": null
 }

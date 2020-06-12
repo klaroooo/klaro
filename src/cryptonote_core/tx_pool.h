@@ -441,6 +441,11 @@ namespace cryptonote
      */
     bool get_transaction_info(const crypto::hash &txid, tx_details &td) const;
 
+    /**
+     * @brief get transactions not in the passed set
+     */
+    bool get_complement(const std::vector<crypto::hash> &hashes, std::vector<cryptonote::blobdata> &txes) const;
+
   private:
 
     /**
@@ -465,10 +470,11 @@ namespace cryptonote
      * @brief check if a transaction in the pool has a given spent key image
      *
      * @param key_im the spent key image to look for
+     * @param txid hash of the new transaction where `key_im` was seen.
      *
      * @return true if the spent key image is present, otherwise false
      */
-    bool have_tx_keyimg_as_spent(const crypto::key_image& key_im) const;
+    bool have_tx_keyimg_as_spent(const crypto::key_image& key_im, const crypto::hash& txid) const;
 
     /**
      * @brief check if any spent key image in a transaction is in the pool
@@ -479,10 +485,11 @@ namespace cryptonote
      * @note see tx_pool::have_tx_keyimg_as_spent
      *
      * @param tx the transaction to check spent key images of
+     * @param txid hash of `tx`.
      *
      * @return true if any spent key images are present in the pool, otherwise false
      */
-    bool have_tx_keyimges_as_spent(const transaction& tx) const;
+    bool have_tx_keyimges_as_spent(const transaction& tx, const crypto::hash& txid) const;
 
     /**
      * @brief forget a transaction's spent key images

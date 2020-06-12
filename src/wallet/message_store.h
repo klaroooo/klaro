@@ -43,6 +43,7 @@
 #include "common/i18n.h"
 #include "common/command_line.h"
 #include "wipeable_string.h"
+#include "net/abstract_http_client.h"
 #include "message_transporter.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -121,8 +122,8 @@ namespace mms
   {
     std::string label;
     std::string transport_address;
-    bool monero_address_known;
-    cryptonote::account_public_address monero_address;
+    bool klaro_address_known;
+    cryptonote::account_public_address klaro_address;
     bool me;
     uint32_t index;
     std::string auto_config_token;
@@ -133,8 +134,8 @@ namespace mms
 
     authorized_signer()
     {
-      monero_address_known = false;
-      memset(&monero_address, 0, sizeof(cryptonote::account_public_address));
+      klaro_address_known = false;
+      memset(&klaro_address, 0, sizeof(cryptonote::account_public_address));
       me = false;
       index = 0;
       auto_config_public_key = crypto::null_pkey;
@@ -162,7 +163,7 @@ namespace mms
   {
     std::string label;
     std::string transport_address;
-    cryptonote::account_public_address monero_address;
+    cryptonote::account_public_address klaro_address;
   };
 
   // Overal .mms file structure, with the "message_store" object serialized to and
@@ -202,7 +203,8 @@ namespace mms
   class message_store
   {
   public:
-    message_store();
+    message_store(std::unique_ptr<epee::net_utils::http::abstract_http_client> http_client);
+
     // Initialize and start to use the MMS, set the first signer, this wallet itself
     // Filename, if not null and not empty, is used to create the ".mms" file
     // reset it if already used, with deletion of all signers and messages
@@ -221,10 +223,10 @@ namespace mms
                     uint32_t index,
                     const boost::optional<std::string> &label,
                     const boost::optional<std::string> &transport_address,
-                    const boost::optional<cryptonote::account_public_address> monero_address);
+                    const boost::optional<cryptonote::account_public_address> klaro_address);
 
     const authorized_signer &get_signer(uint32_t index) const;
-    bool get_signer_index_by_monero_address(const cryptonote::account_public_address &monero_address, uint32_t &index) const;
+    bool get_signer_index_by_klaro_address(const cryptonote::account_public_address &klaro_address, uint32_t &index) const;
     bool get_signer_index_by_label(const std::string label, uint32_t &index) const;
     const std::vector<authorized_signer> &get_all_signers() const { return m_signers; };
     bool signer_config_complete() const;
@@ -240,6 +242,7 @@ namespace mms
     size_t add_auto_config_data_message(const multisig_wallet_state &state,
                                         const std::string &auto_config_token);
     void process_auto_config_data_message(uint32_t id);
+    std::string get_config_checksum() const;
     void stop_auto_config();
 
     // Process data just created by "me" i.e. the own local wallet, e.g. as the result of a "prepare_multisig" command
@@ -273,7 +276,7 @@ namespace mms
     void set_message_processed_or_sent(uint32_t id);
     void delete_message(uint32_t id);
     void delete_all_messages();
-    void get_sanitized_message_text(const message &m, std::string &sanitized_text) const;
+    void get_sanitized_text(const std::string &text, size_t max_length, std::string &sanitized_text) const;
 
     void send_message(const multisig_wallet_state &state, uint32_t id);
     bool check_for_messages(const multisig_wallet_state &state, std::vector<message> &messages);
@@ -379,8 +382,8 @@ namespace boost
     {
       a & x.label;
       a & x.transport_address;
-      a & x.monero_address_known;
-      a & x.monero_address;
+      a & x.klaro_address_known;
+      a & x.klaro_address;
       a & x.me;
       a & x.index;
       if (ver < 1)
@@ -399,7 +402,7 @@ namespace boost
     {
       a & x.label;
       a & x.transport_address;
-      a & x.monero_address;
+      a & x.klaro_address;
     }
 
     template <class Archive>
