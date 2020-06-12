@@ -6,6 +6,7 @@
   "github": "https://github.com/zcash/zcash",
   "maintainer": "Pavol Rusnak <stick@satoshilabs.com>",
   "curve_name": "secp256k1",
+  "decimals": 8,
   "address_type": 7352,
   "address_type_p2sh": 7357,
   "maxfee_kb": 1000000,
@@ -40,11 +41,13 @@
     "https://zec4.trezor.io",
     "https://zec5.trezor.io"
   ],
+  "negative_fee": false,
   "cooldown": 100,
   "consensus_branch_id": {
     "1": 0,
     "2": 0,
     "3": 1537743641,
-    "4": 1991772603
-  }
+    "4": 733220448
+  },
+  "confidential_assets": null
 }

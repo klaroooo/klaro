@@ -1,7 +1,7 @@
 /**
 @file
 @author from CrypoNote (see copyright below; Andrey N. Sabelnikov)
-@monero rfree
+@klaro rfree
 @brief the connection templated-class for one peer connection
 */
 // Copyright (c) 2006-2013, Andrey N. Sabelnikov, www.sabelnikov.net

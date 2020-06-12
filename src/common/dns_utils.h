@@ -109,7 +109,7 @@ public:
    * @brief Gets a DNS address from OpenAlias format
    *
    * If the address looks good, but contains one @ symbol, replace that with a .
-   * e.g. donate@getmonero.org becomes klaro.ooo
+   * e.g. donate@getklaro.org becomes donate.getklaro.org
    *
    * @param oa_addr  OpenAlias address
    *

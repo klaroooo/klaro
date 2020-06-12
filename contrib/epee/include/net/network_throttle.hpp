@@ -1,5 +1,5 @@
 /// @file
-/// @author rfree (current maintainer in monero.cc project)
+/// @author rfree (current maintainer in klaro.cc project)
 /// @brief interface for throttling of connection (count and rate-limit speed etc)
 
 // Copyright (c) 2014-2019, The Monero Project

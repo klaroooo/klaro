@@ -62,7 +62,7 @@ echo "%sudo ALL=NOPASSWD: /usr/bin/lxc-execute" >> /etc/sudoers.d/gitian-lxc
 # make /etc/rc.local script that sets up bridge between guest and host
 echo '#!/bin/sh -e' > /etc/rc.local
 echo 'brctl addbr br0' >> /etc/rc.local
-echo 'ip addr add 10.0.3.1/24 broadcast 10.0.3.255 dev br0' >> /etc/rc.local
+echo 'ip addr add 10.0.2.2/24 broadcast 10.0.2.255 dev br0' >> /etc/rc.local
 echo 'ip link set br0 up' >> /etc/rc.local
 echo 'firewall-cmd --zone=trusted --add-interface=br0' >> /etc/rc.local
 echo 'exit 0' >> /etc/rc.local
@@ -70,8 +70,8 @@ chmod +x /etc/rc.local
 # make sure that USE_LXC is always set when logging in as gitianuser,
 # and configure LXC IP addresses
 echo 'export USE_LXC=1' >> /home/gitianuser/.profile
-echo 'export GITIAN_HOST_IP=10.0.3.1' >> /home/gitianuser/.profile
-echo 'export LXC_GUEST_IP=10.0.3.5' >> /home/gitianuser/.profile
+echo 'export GITIAN_HOST_IP=10.0.2.2' >> /home/gitianuser/.profile
+echo 'export LXC_GUEST_IP=10.0.2.5' >> /home/gitianuser/.profile
 reboot
 ```
 
@@ -117,7 +117,7 @@ Initial Gitian Setup
 The `gitian-build.py` script will checkout different release tags, so it's best to copy it to the top level directory:
 
 ```bash
-cp monero/contrib/gitian/gitian-build.py .
+cp klaro/contrib/gitian/gitian-build.py .
 ```
 
 ### Setup the required environment
@@ -126,7 +126,7 @@ Setup for LXC:
 
 ```bash
 GH_USER=fluffypony
-VERSION=v0.15.0.0
+VERSION=v0.16.0.0
 
 ./gitian-build.py --setup $GH_USER $VERSION
 ```
@@ -141,11 +141,11 @@ Setup for docker:
 
 While gitian and this build script does provide a way for you to sign the build directly, it is recommended to sign in a separate step. This script is only there for convenience. Separate steps for building can still be taken.
 In order to sign gitian builds on your host machine, which has your PGP key, 
-fork the [gitian.sigs repository](https://github.com/monero-project/gitian.sigs) and clone it on your host machine, 
+fork the [gitian.sigs repository](https://github.com/klaro-project/gitian.sigs) and clone it on your host machine, 
 or pass the signed assert file back to your build machine.
 
 ```bash
-git clone git@github.com:monero-project/gitian.sigs.git
+git clone git@github.com:klaro-project/gitian.sigs.git
 git remote add $GH_USER git@github.com:$GH_USER/gitian.sigs.git
 ```
 
@@ -172,7 +172,7 @@ Take a look in the assert files and note the SHA256 checksums listed there.
 You should verify that the checksum that is listed matches each of the binaries you actually built.
 This may be done on Linux using the `sha256sum` command or on MacOS using `shasum --algorithm 256` for example.
 
-You can also look in the [gitian.sigs](https://github.com/monero-project/gitian.sigs/) repo and / or [getmonero.org release checksums](https://web.getmonero.org/downloads/hashes.txt) to see if others got the same checksum for the same version tag.  If there is ever a mismatch -- **STOP! Something is wrong**.  Contact others on IRC / github to figure out what is going on.
+You can also look in the [gitian.sigs](https://github.com/klaro-project/gitian.sigs/) repo and / or [getklaro.org release checksums](https://web.getklaro.org/downloads/hashes.txt) to see if others got the same checksum for the same version tag.  If there is ever a mismatch -- **STOP! Something is wrong**.  Contact others on IRC / github to figure out what is going on.
 
 
 Signing assert files
@@ -182,12 +182,12 @@ If you chose to do detached signing using `--detach-sign` above (recommended), y
 
 ```bash
 GH_USER=fluffypony
-VERSION=v0.15.0.0
+VERSION=v0.16.0.0
 
-gpg --detach-sign ${VERSION}-linux/${GH_USER}/monero-linux-*-build.assert
-gpg --detach-sign ${VERSION}-win/${GH_USER}/monero-win-*-build.assert
-gpg --detach-sign ${VERSION}-osx/${GH_USER}/monero-osx-*-build.assert
-gpg --detach-sign ${VERSION}-android/${GH_USER}/monero-android-*-build.assert
+gpg --detach-sign ${VERSION}-linux/${GH_USER}/klaro-linux-*-build.assert
+gpg --detach-sign ${VERSION}-win/${GH_USER}/klaro-win-*-build.assert
+gpg --detach-sign ${VERSION}-osx/${GH_USER}/klaro-osx-*-build.assert
+gpg --detach-sign ${VERSION}-android/${GH_USER}/klaro-android-*-build.assert
 ```
 
 This will create a `.sig` file for each `.assert` file above (2 files for each platform).
@@ -197,7 +197,7 @@ Submitting your signed assert files
 -----------------------------------
 
 Make a pull request (both the `.assert` and `.assert.sig` files) to the
-[monero-project/gitian.sigs](https://github.com/monero-project/gitian.sigs/) repository:
+[klaro-project/gitian.sigs](https://github.com/klaro-project/gitian.sigs/) repository:
 
 ```bash
 git checkout -b $VERSION
@@ -206,7 +206,7 @@ git commit -S -a -m "Add $GH_USER $VERSION"
 git push --set-upstream $GH_USER $VERSION
 ```
 
-**Note:** Please ensure your gpg public key is available to check signatures by adding it to the [gitian.sigs/gitian-pubkeys/](https://github.com/monero-project/gitian.sigs/tree/master/gitian-pubkeys) directory in a pull request.
+**Note:** Please ensure your gpg public key is available to check signatures by adding it to the [gitian.sigs/gitian-pubkeys/](https://github.com/klaro-project/gitian.sigs/tree/master/gitian-pubkeys) directory in a pull request.
 
 
 More Build Options
@@ -214,7 +214,7 @@ More Build Options
 
 You can choose your own remote and commit hash by running for example:
 ```bash
-./gitian-build.py --detach-sign --no-commit --url https://github.com/moneromooo-monero/bitmonero -b moneromooo 1f5680c8db8f4cc7acc04a04c724b832003440fd
+./gitian-build.py --detach-sign --no-commit --url https://github.com/klaromooo-klaro/bitklaro -b klaromooo 1f5680c8db8f4cc7acc04a04c724b832003440fd
 ```
 
 Note that you won't be able to build commits authored before the gitian scripts

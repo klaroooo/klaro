@@ -32,6 +32,8 @@
 #include <cstdint>
 #include <system_error>
 
+#include "byte_slice.h"
+
 namespace cryptonote
 {
 
@@ -73,10 +75,11 @@ void ZmqServer::serve()
     {
       const std::string message = MONERO_UNWRAP(net::zmq::receive(socket.get()));
       MDEBUG("Received RPC request: \"" << message << "\"");
-      const std::string& response = handler.handle(message);
+      epee::byte_slice response = handler.handle(message);
 
-      MONERO_UNWRAP(net::zmq::send(epee::strspan<std::uint8_t>(response), socket.get()));
-      MDEBUG("Sent RPC reply: \"" << response << "\"");
+      const boost::string_ref response_view{reinterpret_cast<const char*>(response.data()), response.size()};
+      MDEBUG("Sending RPC reply: \"" << response_view << "\"");
+      MONERO_UNWRAP(net::zmq::send(std::move(response), socket.get()));
     }
   }
   catch (const std::system_error& e)

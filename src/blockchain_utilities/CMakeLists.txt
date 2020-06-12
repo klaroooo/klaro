@@ -38,7 +38,7 @@ set(blockchain_import_private_headers
   bootstrap_serialization.h
   )
 
-monero_private_headers(blockchain_import
+klaro_private_headers(blockchain_import
 	  ${blockchain_import_private_headers})
 
 set(blockchain_export_sources
@@ -53,7 +53,7 @@ set(blockchain_export_private_headers
   bootstrap_serialization.h
   )
 
-monero_private_headers(blockchain_export
+klaro_private_headers(blockchain_export
 	  ${blockchain_export_private_headers})
 
 
@@ -67,7 +67,7 @@ set(blockchain_blackball_private_headers
   bootstrap_serialization.h
   )
 
-monero_private_headers(blockchain_blackball
+klaro_private_headers(blockchain_blackball
 	  ${blockchain_blackball_private_headers})
 
 set(blockchain_usage_sources
@@ -76,7 +76,7 @@ set(blockchain_usage_sources
 
 set(blockchain_usage_private_headers)
 
-monero_private_headers(blockchain_usage
+klaro_private_headers(blockchain_usage
 	  ${blockchain_usage_private_headers})
 
 
@@ -87,7 +87,7 @@ set(blockchain_prune_known_spent_data_sources
 
 set(blockchain_prune_known_spent_data_private_headers)
 
-monero_private_headers(blockchain_prune_known_spent_data
+klaro_private_headers(blockchain_prune_known_spent_data
 	  ${blockchain_prune_known_spent_data_private_headers})
 
 
@@ -98,7 +98,7 @@ set(blockchain_prune_sources
 
 set(blockchain_prune_private_headers)
 
-monero_private_headers(blockchain_prune
+klaro_private_headers(blockchain_prune
 	  ${blockchain_prune_private_headers})
 
 
@@ -109,7 +109,7 @@ set(blockchain_ancestry_sources
 
 set(blockchain_ancestry_private_headers)
 
-monero_private_headers(blockchain_ancestry
+klaro_private_headers(blockchain_ancestry
 	  ${blockchain_ancestry_private_headers})
 
 
@@ -120,7 +120,7 @@ set(blockchain_depth_sources
 
 set(blockchain_depth_private_headers)
 
-monero_private_headers(blockchain_depth
+klaro_private_headers(blockchain_depth
 	  ${blockchain_depth_private_headers})
 
 set(blockchain_stats_sources
@@ -129,11 +129,11 @@ set(blockchain_stats_sources
 
 set(blockchain_stats_private_headers)
 
-monero_private_headers(blockchain_stats
+klaro_private_headers(blockchain_stats
 	  ${blockchain_stats_private_headers})
 
 
-monero_add_executable(blockchain_import
+klaro_add_executable(blockchain_import
   ${blockchain_import_sources}
   ${blockchain_import_private_headers})
 
@@ -160,7 +160,7 @@ set_property(TARGET blockchain_import
 	OUTPUT_NAME "klaro-blockchain-import")
 install(TARGETS blockchain_import DESTINATION bin)
 
-monero_add_executable(blockchain_export
+klaro_add_executable(blockchain_export
   ${blockchain_export_sources}
   ${blockchain_export_private_headers})
 
@@ -181,7 +181,7 @@ set_property(TARGET blockchain_export
 	OUTPUT_NAME "klaro-blockchain-export")
 install(TARGETS blockchain_export DESTINATION bin)
 
-monero_add_executable(blockchain_blackball
+klaro_add_executable(blockchain_blackball
   ${blockchain_blackball_sources}
   ${blockchain_blackball_private_headers})
 
@@ -204,7 +204,7 @@ set_property(TARGET blockchain_blackball
 install(TARGETS blockchain_blackball DESTINATION bin)
 
 
-monero_add_executable(blockchain_usage
+klaro_add_executable(blockchain_usage
   ${blockchain_usage_sources}
   ${blockchain_usage_private_headers})
 
@@ -225,7 +225,7 @@ set_property(TARGET blockchain_usage
 	OUTPUT_NAME "klaro-blockchain-usage")
 install(TARGETS blockchain_usage DESTINATION bin)
 
-monero_add_executable(blockchain_ancestry
+klaro_add_executable(blockchain_ancestry
   ${blockchain_ancestry_sources}
   ${blockchain_ancestry_private_headers})
 
@@ -246,7 +246,7 @@ set_property(TARGET blockchain_ancestry
 	OUTPUT_NAME "klaro-blockchain-ancestry")
 install(TARGETS blockchain_ancestry DESTINATION bin)
 
-monero_add_executable(blockchain_depth
+klaro_add_executable(blockchain_depth
   ${blockchain_depth_sources}
   ${blockchain_depth_private_headers})
 
@@ -267,7 +267,7 @@ set_property(TARGET blockchain_depth
 	OUTPUT_NAME "klaro-blockchain-depth")
 install(TARGETS blockchain_depth DESTINATION bin)
 
-monero_add_executable(blockchain_stats
+klaro_add_executable(blockchain_stats
   ${blockchain_stats_sources}
   ${blockchain_stats_private_headers})
 
@@ -288,7 +288,7 @@ set_property(TARGET blockchain_stats
 	OUTPUT_NAME "klaro-blockchain-stats")
 install(TARGETS blockchain_stats DESTINATION bin)
 
-monero_add_executable(blockchain_prune_known_spent_data
+klaro_add_executable(blockchain_prune_known_spent_data
   ${blockchain_prune_known_spent_data_sources}
   ${blockchain_prune_known_spent_data_private_headers})
 
@@ -310,7 +310,7 @@ set_property(TARGET blockchain_prune_known_spent_data
 	OUTPUT_NAME "klaro-blockchain-prune-known-spent-data")
 install(TARGETS blockchain_prune_known_spent_data DESTINATION bin)
 
-monero_add_executable(blockchain_prune
+klaro_add_executable(blockchain_prune
   ${blockchain_prune_sources}
   ${blockchain_prune_private_headers})
 

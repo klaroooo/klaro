@@ -400,8 +400,8 @@ struct WalletListener
     /**
      * @brief called by device when passphrase entry is needed
      */
-    virtual optional<std::string> onDevicePassphraseRequest(bool on_device) {
-        if (!on_device) throw std::runtime_error("Not supported");
+    virtual optional<std::string> onDevicePassphraseRequest(bool & on_device) {
+        on_device = true;
         return optional<std::string>();
     }
 
@@ -532,7 +532,7 @@ struct Wallet
      * \param upper_transaction_size_limit
      * \param daemon_username
      * \param daemon_password
-     * \param lightWallet - start wallet in light mode, connect to a openmonero compatible server.
+     * \param lightWallet - start wallet in light mode, connect to a openklaro compatible server.
      * \return  - true on success
      */
     virtual bool init(const std::string &daemon_address, uint64_t upper_transaction_size_limit = 0, const std::string &daemon_username = "", const std::string &daemon_password = "", bool use_ssl = false, bool lightWallet = false) = 0;
@@ -879,6 +879,14 @@ struct Wallet
      */
     virtual void disposeTransaction(PendingTransaction * t) = 0;
 
+    /*!
+     * \brief Estimates transaction fee.
+     * \param destinations Vector consisting of <address, amount> pairs.
+     * \return Estimated fee.
+     */
+    virtual uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations,
+                                            PendingTransaction::Priority priority) const = 0;
+
    /*!
     * \brief exportKeyImages - exports key images to file
     * \param filename
@@ -1085,10 +1093,12 @@ struct WalletManager
      * \param  nettype        Network type
      * \param  restoreHeight  restore from start height
      * \param  kdf_rounds     Number of rounds for key derivation function
+     * \param  seed_offset    Seed offset passphrase (optional)
      * \return                Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
      */
     virtual Wallet * recoveryWallet(const std::string &path, const std::string &password, const std::string &mnemonic,
-                                    NetworkType nettype = MAINNET, uint64_t restoreHeight = 0, uint64_t kdf_rounds = 1) = 0;
+                                    NetworkType nettype = MAINNET, uint64_t restoreHeight = 0, uint64_t kdf_rounds = 1,
+                                    const std::string &seed_offset = {}) = 0;
     Wallet * recoveryWallet(const std::string &path, const std::string &password, const std::string &mnemonic,
                                     bool testnet = false, uint64_t restoreHeight = 0)           // deprecated
     {
@@ -1279,11 +1289,15 @@ struct WalletManager
     //! stops mining
     virtual bool stopMining() = 0;
 
-    //! resolves an OpenAlias address to a monero address
+    //! resolves an OpenAlias address to a klaro address
     virtual std::string resolveOpenAlias(const std::string &address, bool &dnssec_valid) const = 0;
 
     //! checks for an update and returns version, hash and url
-    static std::tuple<bool, std::string, std::string, std::string, std::string> checkUpdates(const std::string &software, std::string subdir);
+    static std::tuple<bool, std::string, std::string, std::string, std::string> checkUpdates(
+        const std::string &software,
+        std::string subdir,
+        const char *buildtag = nullptr,
+        const char *current_version = nullptr);
 };
 
 
@@ -1309,5 +1323,5 @@ struct WalletManagerFactory
 
 }
 
-namespace Bitmonero = Monero;
+namespace Bitklaro = Monero;
 

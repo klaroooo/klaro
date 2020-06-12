@@ -93,7 +93,7 @@ namespace
 
   constexpr const auto client_auth_field = ceref(u8"Authorization");
   constexpr const auto server_auth_field = ceref(u8"WWW-authenticate");
-  constexpr const auto auth_realm = ceref(u8"monero-rpc");
+  constexpr const auto auth_realm = ceref(u8"klaro-rpc");
   constexpr const char comma = 44;
   constexpr const char equal_sign = 61;
   constexpr const char quote = 34;
@@ -584,8 +584,8 @@ namespace
       explicit server_parameters(const auth_message& request, const DigestIter& digest)
         : nonce(request.nonce)
         , opaque(request.opaque)
-        , stale(request.stale)
         , realm(request.realm)
+        , stale(request.stale)
         , value_generator()
         , index(boost::fusion::distance(boost::fusion::begin(digest_algorithms), digest))
       {

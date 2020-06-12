@@ -39,6 +39,7 @@
 #include "serialization/binary_utils.h"
 #include "common/base58.h"
 #include "common/util.h"
+#include "common/utf8.h"
 #include "string_tools.h"
 
 
@@ -48,7 +49,7 @@
 namespace mms
 {
 
-message_store::message_store()
+message_store::message_store(std::unique_ptr<epee::net_utils::http::abstract_http_client> http_client) : m_transporter(std::move(http_client))
 {
   m_active = false;
   m_auto_send = false;
@@ -123,24 +124,24 @@ void message_store::set_signer(const multisig_wallet_state &state,
                                uint32_t index,
                                const boost::optional<std::string> &label,
                                const boost::optional<std::string> &transport_address,
-                               const boost::optional<cryptonote::account_public_address> monero_address)
+                               const boost::optional<cryptonote::account_public_address> klaro_address)
 {
   THROW_WALLET_EXCEPTION_IF(index >= m_num_authorized_signers, tools::error::wallet_internal_error, "Invalid signer index " + std::to_string(index));
   authorized_signer &m = m_signers[index];
   if (label)
   {
-    m.label = label.get();
+    get_sanitized_text(label.get(), 50, m.label);
   }
   if (transport_address)
   {
-    m.transport_address = transport_address.get();
+    get_sanitized_text(transport_address.get(), 200, m.transport_address);
   }
-  if (monero_address)
+  if (klaro_address)
   {
-    m.monero_address_known = true;
-    m.monero_address = monero_address.get();
+    m.klaro_address_known = true;
+    m.klaro_address = klaro_address.get();
   }
-  // Save to minimize the chance to loose that info (at least while in beta)
+  // Save to minimize the chance to loose that info
   save(state);
 }
 
@@ -155,7 +156,7 @@ bool message_store::signer_config_complete() const
   for (uint32_t i = 0; i < m_num_authorized_signers; ++i)
   {
     const authorized_signer &m = m_signers[i];
-    if (m.label.empty() || m.transport_address.empty() || !m.monero_address_known)
+    if (m.label.empty() || m.transport_address.empty() || !m.klaro_address_known)
     {
       return false;
     }
@@ -202,6 +203,17 @@ void message_store::unpack_signer_config(const multisig_wallet_state &state, con
   }
   uint32_t num_signers = (uint32_t)signers.size();
   THROW_WALLET_EXCEPTION_IF(num_signers != m_num_authorized_signers, tools::error::wallet_internal_error, "Wrong number of signers in config: " + std::to_string(num_signers));
+  for (uint32_t i = 0; i < num_signers; ++i)
+  {
+    authorized_signer &m = signers[i];
+    std::string temp;
+    get_sanitized_text(m.label, 50, temp);
+    m.label = temp;
+    get_sanitized_text(m.transport_address, 200, temp);
+    m.transport_address = temp;
+    get_sanitized_text(m.auto_config_token, 20, temp);
+    m.auto_config_token = temp;
+  }
 }
 
 void message_store::process_signer_config(const multisig_wallet_state &state, const std::string &signer_config)
@@ -225,7 +237,7 @@ void message_store::process_signer_config(const multisig_wallet_state &state, co
     const authorized_signer &m = signers[i];
     uint32_t index;
     uint32_t take_index;
-    bool found = get_signer_index_by_monero_address(m.monero_address, index);
+    bool found = get_signer_index_by_klaro_address(m.klaro_address, index);
     if (found)
     {
       // Redefine existing (probably "me", under usual circumstances)
@@ -242,14 +254,14 @@ void message_store::process_signer_config(const multisig_wallet_state &state, co
       }
     }
     authorized_signer &modify = m_signers[take_index];
-    modify.label = m.label;  // ALWAYS set label, see comments above
+    get_sanitized_text(m.label, 50, modify.label);  // ALWAYS set label, see comments above
     if (!modify.me)
     {
-      modify.transport_address = m.transport_address;
-      modify.monero_address_known = m.monero_address_known;
-      if (m.monero_address_known)
+      get_sanitized_text(m.transport_address, 200, modify.transport_address);
+      modify.klaro_address_known = m.klaro_address_known;
+      if (m.klaro_address_known)
       {
-        modify.monero_address = m.monero_address;
+        modify.klaro_address = m.klaro_address;
       }
     }
   }
@@ -353,7 +365,7 @@ size_t message_store::add_auto_config_data_message(const multisig_wallet_state &
   auto_config_data data;
   data.label = me.label;
   data.transport_address = me.transport_address;
-  data.monero_address = me.monero_address;
+  data.klaro_address = me.klaro_address;
 
   std::stringstream oss;
   boost::archive::portable_binary_oarchive ar(oss);
@@ -387,9 +399,48 @@ void message_store::process_auto_config_data_message(uint32_t id)
   authorized_signer &signer = m_signers[m.signer_index];
   // "signer.label" does NOT change, see comment above
   signer.transport_address = data.transport_address;
-  signer.monero_address_known = true;
-  signer.monero_address = data.monero_address;
+  signer.klaro_address_known = true;
+  signer.klaro_address = data.klaro_address;
   signer.auto_config_running = false;
+}
+
+void add_hash(crypto::hash &sum, const crypto::hash &summand)
+{
+  for (uint32_t i = 0; i < crypto::HASH_SIZE; ++i)
+  {
+    uint32_t x = (uint32_t)sum.data[i];
+    uint32_t y = (uint32_t)summand.data[i];
+    sum.data[i] = (char)((x + y) % 256);
+  }
+}
+
+// Calculate a checksum that allows signers to make sure they work with an identical signer config
+// by exchanging and comparing checksums out-of-band i.e. not using the MMS;
+// Because different signers have a different order of signers in the config work with "adding"
+// individual hashes because that operation is commutative
+std::string message_store::get_config_checksum() const
+{
+  crypto::hash sum = crypto::null_hash;
+  uint32_t num = SWAP32LE(m_num_authorized_signers);
+  add_hash(sum, crypto::cn_fast_hash(&num, sizeof(num)));
+  num = SWAP32LE(m_num_required_signers);
+  add_hash(sum, crypto::cn_fast_hash(&num, sizeof(num)));
+  for (uint32_t i = 0; i < m_num_authorized_signers; ++i)
+  {
+    const authorized_signer &m = m_signers[i];
+    add_hash(sum, crypto::cn_fast_hash(m.transport_address.data(), m.transport_address.size()));
+    if (m.klaro_address_known)
+    {
+      add_hash(sum, crypto::cn_fast_hash(&m.klaro_address.m_spend_public_key, sizeof(m.klaro_address.m_spend_public_key)));
+      add_hash(sum, crypto::cn_fast_hash(&m.klaro_address.m_view_public_key, sizeof(m.klaro_address.m_view_public_key)));
+    }
+  }
+  std::string checksum_bytes;
+  checksum_bytes += sum.data[0];
+  checksum_bytes += sum.data[1];
+  checksum_bytes += sum.data[2];
+  checksum_bytes += sum.data[3];
+  return epee::string_tools::buff_to_hex_nodelimer(checksum_bytes);
 }
 
 void message_store::stop_auto_config()
@@ -431,18 +482,18 @@ void message_store::setup_signer_for_auto_config(uint32_t index, const std::stri
   m.auto_config_transport_address = m_transporter.derive_transport_address(m.auto_config_token);
 }
 
-bool message_store::get_signer_index_by_monero_address(const cryptonote::account_public_address &monero_address, uint32_t &index) const
+bool message_store::get_signer_index_by_klaro_address(const cryptonote::account_public_address &klaro_address, uint32_t &index) const
 {
   for (uint32_t i = 0; i < m_num_authorized_signers; ++i)
   {
     const authorized_signer &m = m_signers[i];
-    if (m.monero_address == monero_address)
+    if (m.klaro_address == klaro_address)
     {
       index = m.index;
       return true;
     }
   }
-  MWARNING("No authorized signer with Monero address " << account_address_to_string(monero_address));
+  MWARNING("No authorized signer with Klaro address " << account_address_to_string(klaro_address));
   return false;
 }
 
@@ -661,31 +712,36 @@ void message_store::delete_all_messages()
   m_messages.clear();
 }
 
-// Make a message text, which is "attacker controlled data", reasonably safe to display
+// Make a text, which is "attacker controlled data", reasonably safe to display
 // This is mostly geared towards the safe display of notes sent by "mms note" with a "mms show" command
-void message_store::get_sanitized_message_text(const message &m, std::string &sanitized_text) const
+void message_store::get_sanitized_text(const std::string &text, size_t max_length, std::string &sanitized_text) const
 {
-  sanitized_text.clear();
-
   // Restrict the size to fend of DOS-style attacks with heaps of data
-  size_t length = std::min(m.content.length(), (size_t)1000);
+  size_t length = std::min(text.length(), max_length);
+  sanitized_text = text.substr(0, length);
 
-  for (size_t i = 0; i < length; ++i)
+  try
   {
-    char c = m.content[i];
-    if ((int)c < 32)
+    sanitized_text = tools::utf8canonical(sanitized_text, [](wint_t c)
     {
-      // Strip out any controls, especially ESC for getting rid of potentially dangerous
-      // ANSI escape sequences that a console window might interpret
-      c = ' ';
-    }
-    else if ((c == '<') || (c == '>'))
-    {
-      // Make XML or HTML impossible that e.g. might contain scripts that Qt might execute
-      // when displayed in the GUI wallet
-      c = ' ';
-    }
-    sanitized_text += c;
+      if ((c < 0x20) || (c == 0x7f) || (c >= 0x80 && c <= 0x9f))
+      {
+        // Strip out any controls, especially ESC for getting rid of potentially dangerous
+        // ANSI escape sequences that a console window might interpret
+        c = '?';
+      }
+      else if ((c == '<') || (c == '>'))
+      {
+        // Make XML or HTML impossible that e.g. might contain scripts that Qt might execute
+        // when displayed in the GUI wallet
+        c = '?';
+      }
+      return c;
+    });
+  }
+  catch (const std::exception &e)
+  {
+    sanitized_text = "(Illegal UTF-8 string)";
   }
 }
 
@@ -724,7 +780,7 @@ void message_store::read_from_file(const multisig_wallet_state &state, const std
   {
     // Simply do nothing if the file is not there; allows e.g. easy recovery
     // from problems with the MMS by deleting the file
-    MERROR("No message store file found: " << filename);
+    MINFO("No message store file found: " << filename);
     return;
   }
 
@@ -1202,7 +1258,7 @@ void message_store::send_message(const multisig_wallet_state &state, uint32_t id
   dm.timestamp = (uint64_t)time(NULL);
   dm.subject = "MMS V0 " + tools::get_human_readable_timestamp(dm.timestamp);
   dm.source_transport_address = me.transport_address;
-  dm.source_monero_address = me.monero_address;
+  dm.source_klaro_address = me.klaro_address;
   if (m.type == message_type::auto_config_data)
   {
     // Encrypt with the public key derived from the auto-config token, and send to the
@@ -1210,14 +1266,14 @@ void message_store::send_message(const multisig_wallet_state &state, uint32_t id
     public_key = me.auto_config_public_key;
     dm.destination_transport_address = me.auto_config_transport_address;
     // The destination Monero address is not yet known
-    memset(&dm.destination_monero_address, 0, sizeof(cryptonote::account_public_address));
+    memset(&dm.destination_klaro_address, 0, sizeof(cryptonote::account_public_address));
   }
   else
   {
     // Encrypt with the receiver's view public key
-    public_key = receiver.monero_address.m_view_public_key;
+    public_key = receiver.klaro_address.m_view_public_key;
     const authorized_signer &receiver = m_signers[m.signer_index];
-    dm.destination_monero_address = receiver.monero_address;
+    dm.destination_klaro_address = receiver.klaro_address;
     dm.destination_transport_address = receiver.transport_address;
   }
   encrypt(public_key, m.content, dm.content, dm.encryption_public_key, dm.iv);
@@ -1225,7 +1281,7 @@ void message_store::send_message(const multisig_wallet_state &state, uint32_t id
   dm.hash = crypto::cn_fast_hash(dm.content.data(), dm.content.size());
   dm.round = m.round;
 
-  crypto::generate_signature(dm.hash, me.monero_address.m_view_public_key, state.view_secret_key, dm.signature);
+  crypto::generate_signature(dm.hash, me.klaro_address.m_view_public_key, state.view_secret_key, dm.signature);
 
   m_transporter.send_message(dm);
 
@@ -1296,20 +1352,20 @@ bool message_store::check_for_messages(const multisig_wallet_state &state, std::
       else
       {
         // Only accept from senders that are known as signer here, otherwise just ignore
-        take = get_signer_index_by_monero_address(rm.source_monero_address, sender_index);
+        take = get_signer_index_by_klaro_address(rm.source_klaro_address, sender_index);
       }
       if (take && (type != message_type::auto_config_data))
       {
         // If the destination address is known, check it as well; this additional filter
         // allows using the same transport address for multiple signers
-        take = rm.destination_monero_address == me.monero_address;
+        take = rm.destination_klaro_address == me.klaro_address;
       }
       if (take)
       {
         crypto::hash actual_hash = crypto::cn_fast_hash(rm.content.data(), rm.content.size());
         THROW_WALLET_EXCEPTION_IF(actual_hash != rm.hash, tools::error::wallet_internal_error, "Message hash mismatch");
 
-        bool signature_valid = crypto::check_signature(actual_hash, rm.source_monero_address.m_view_public_key, rm.signature);
+        bool signature_valid = crypto::check_signature(actual_hash, rm.source_klaro_address.m_view_public_key, rm.signature);
         THROW_WALLET_EXCEPTION_IF(!signature_valid, tools::error::wallet_internal_error, "Message signature not valid");
 
         std::string plaintext;

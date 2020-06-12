@@ -47,6 +47,7 @@
 #include "include_base_utils.h"
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
+#include "common/threadpool.h"
 
 #include "cryptonote_basic/account_boost_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
@@ -115,7 +116,8 @@ struct event_visitor_settings
   {
     set_txs_keeped_by_block = 1 << 0,
     set_txs_do_not_relay = 1 << 1,
-    set_local_relay = 1 << 2
+    set_local_relay = 1 << 2,
+    set_txs_stem = 1 << 3
   };
 
   event_visitor_settings(int a_mask = 0)
@@ -227,8 +229,8 @@ public:
     bf_hf_version= 1 << 8
   };
 
-  test_generator() {}
-  test_generator(const test_generator &other): m_blocks_info(other.m_blocks_info) {}
+  test_generator(): m_events(nullptr) {}
+  test_generator(const test_generator &other): m_blocks_info(other.m_blocks_info), m_events(other.m_events), m_nettype(other.m_nettype) {}
   void get_block_chain(std::vector<block_info>& blockchain, const crypto::hash& head, size_t n) const;
   void get_last_n_block_weights(std::vector<size_t>& block_weights, const crypto::hash& head, size_t n) const;
   uint64_t get_already_generated_coins(const crypto::hash& blk_id) const;
@@ -253,9 +255,14 @@ public:
     uint8_t hf_version = 1);
   bool construct_block_manually_tx(cryptonote::block& blk, const cryptonote::block& prev_block,
     const cryptonote::account_base& miner_acc, const std::vector<crypto::hash>& tx_hashes, size_t txs_size);
+  void fill_nonce(cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height);
+  void set_events(const std::vector<test_event_entry> * events) { m_events = events; }
+  void set_network_type(const cryptonote::network_type nettype) { m_nettype = nettype; }
 
 private:
   std::unordered_map<crypto::hash, block_info> m_blocks_info;
+  const std::vector<test_event_entry> * m_events;
+  cryptonote::network_type m_nettype;
 
   friend class boost::serialization::access;
 
@@ -407,7 +414,6 @@ cryptonote::account_public_address get_address(const cryptonote::tx_destination_
 
 inline cryptonote::difficulty_type get_test_difficulty(const boost::optional<uint8_t>& hf_ver=boost::none) {return !hf_ver || hf_ver.get() <= 1 ? 1 : 2;}
 inline uint64_t current_difficulty_window(const boost::optional<uint8_t>& hf_ver=boost::none){ return !hf_ver || hf_ver.get() <= 1 ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2; }
-void fill_nonce(cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height);
 
 cryptonote::tx_destination_entry build_dst(const var_addr_t& to, bool is_subaddr=false, uint64_t amount=0);
 std::vector<cryptonote::tx_destination_entry> build_dsts(const var_addr_t& to1, bool sub1=false, uint64_t am1=0);
@@ -490,6 +496,7 @@ void fill_tx_sources_and_destinations(const std::vector<test_event_entry>& event
 uint64_t get_balance(const cryptonote::account_base& addr, const std::vector<cryptonote::block>& blockchain, const map_hash2tx_t& mtx);
 
 bool extract_hard_forks(const std::vector<test_event_entry>& events, v_hardforks_t& hard_forks);
+bool extract_hard_forks_from_blocks(const std::vector<test_event_entry>& events, v_hardforks_t& hard_forks);
 
 /************************************************************************/
 /*                                                                      */
@@ -511,7 +518,7 @@ public:
     , m_events(events)
     , m_validator(validator)
     , m_ev_index(0)
-    , m_tx_relay(cryptonote::relay_method::flood)
+    , m_tx_relay(cryptonote::relay_method::fluff)
   {
   }
 
@@ -542,9 +549,13 @@ public:
     {
       m_tx_relay = cryptonote::relay_method::none;
     }
+    else if (settings.mask & event_visitor_settings::set_txs_stem)
+    {
+      m_tx_relay = cryptonote::relay_method::stem;
+    }
     else
     {
-      m_tx_relay = cryptonote::relay_method::flood;
+      m_tx_relay = cryptonote::relay_method::fluff;
     }
 
     return true;
@@ -770,6 +781,7 @@ inline bool do_replay_events_get_core(std::vector<test_event_entry>& events, cry
 
   t_test_class validator;
   bool ret = replay_events_through_core<t_test_class>(c, events, validator);
+  tools::threadpool::getInstance().recycle();
 //  c.deinit();
   return ret;
 }
@@ -844,10 +856,10 @@ inline bool do_replay_file(const std::string& filename)
 }
 
 #define REGISTER_CALLBACK(CB_NAME, CLBACK) \
-  register_callback(CB_NAME, boost::bind(&CLBACK, this, _1, _2, _3));
+  register_callback(CB_NAME, boost::bind(&CLBACK, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
 
 #define REGISTER_CALLBACK_METHOD(CLASS, METHOD) \
-  register_callback(#METHOD, boost::bind(&CLASS::METHOD, this, _1, _2, _3));
+  register_callback(#METHOD, boost::bind(&CLASS::METHOD, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
 
 #define MAKE_GENESIS_BLOCK(VEC_EVENTS, BLK_NAME, MINER_ACC, TS)                       \
   test_generator generator;                                                           \

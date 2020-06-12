@@ -75,6 +75,7 @@ namespace cryptonote
     static const command_line::arg_descriptor<std::string> arg_rpc_payment_address;
     static const command_line::arg_descriptor<uint64_t> arg_rpc_payment_difficulty;
     static const command_line::arg_descriptor<uint64_t> arg_rpc_payment_credits;
+    static const command_line::arg_descriptor<bool> arg_rpc_payment_allow_free_loopback;
 
     typedef epee::net_utils::connection_context_base connection_context;
 
@@ -88,7 +89,8 @@ namespace cryptonote
     bool init(
         const boost::program_options::variables_map& vm,
         const bool restricted,
-        const std::string& port
+        const std::string& port,
+        bool allow_rpc_payment
       );
     network_type nettype() const { return m_core.get_nettype(); }
 
@@ -265,7 +267,7 @@ private:
     //utils
     uint64_t get_block_reward(const block& blk);
     bool fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash);
-    boost::optional<std::string> get_random_public_node();
+    std::map<std::string, bool> get_public_nodes(uint32_t credits_per_hash_threshold = 0);
     bool set_bootstrap_daemon(const std::string &address, const std::string &username_password);
     bool set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials);
     enum invoke_http_mode { JON, BIN, JON_RPC };
@@ -285,6 +287,8 @@ private:
     epee::critical_section m_host_fails_score_lock;
     std::map<std::string, uint64_t> m_host_fails_score;
     std::unique_ptr<rpc_payment> m_rpc_payment;
+    bool disable_rpc_ban;
+    bool m_rpc_payment_allow_free_loopback;
   };
 }
 

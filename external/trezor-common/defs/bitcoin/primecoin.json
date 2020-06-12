@@ -6,6 +6,7 @@
   "github": "https://github.com/primecoin/primecoin",
   "maintainer": "James Skrowvedeht <james@thedevworks.io>",
   "curve_name": "secp256k1",
+  "decimals": 8,
   "address_type": 23,
   "address_type_p2sh": 83,
   "maxfee_kb": 1000000,
@@ -34,6 +35,8 @@
   "max_address_length": 35,
   "bitcore": [],
   "blockbook": [],
+  "negative_fee": false,
   "cooldown": 100,
-  "consensus_branch_id": null
+  "consensus_branch_id": null,
+  "confidential_assets": null
 }

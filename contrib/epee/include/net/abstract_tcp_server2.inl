@@ -1,7 +1,7 @@
 /**
 @file
 @author from CrypoNote (see copyright below; Andrey N. Sabelnikov)
-@monero rfree
+@klaro rfree
 @brief the connection templated-class for one peer connection
 */
 // Copyright (c) 2006-2013, Andrey N. Sabelnikov, www.sabelnikov.net
@@ -363,8 +363,8 @@ PRAGMA_WARNING_DISABLE_VS(4355)
 				}
 				
 				delay *= 0.5;
-				if (delay > 0) {
-					long int ms = (long int)(delay * 100);
+				long int ms = (long int)(delay * 100);
+				if (ms > 0) {
 					reset_timer(boost::posix_time::milliseconds(ms + 1), true);
 					boost::this_thread::sleep_for(boost::chrono::milliseconds(ms));
 				}
@@ -574,7 +574,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
 					if (!all_ok) {
 						MDEBUG("do_send() DONE ***FAILED*** from packet="<<message_size<<" B for ptr="<<message_data);
 						MDEBUG("do_send() SEND was aborted in middle of big package - this is mostly harmless "
-							<< " (e.g. peer closed connection) but if it causes trouble tell us at #monero-dev. " << message_size);
+							<< " (e.g. peer closed connection) but if it causes trouble tell us at #klaro-dev. " << message_size);
 						return false; // partial failure in sending
 					}
 					// (in catch block, or uniq pointer) delete buf;
@@ -721,7 +721,9 @@ PRAGMA_WARNING_DISABLE_VS(4355)
   boost::posix_time::milliseconds connection<t_protocol_handler>::get_timeout_from_bytes_read(size_t bytes)
   {
     boost::posix_time::milliseconds ms = (boost::posix_time::milliseconds)(unsigned)(bytes * TIMEOUT_EXTRA_MS_PER_BYTE);
-    ms += m_timer.expires_from_now();
+    const auto cur = m_timer.expires_from_now().total_milliseconds();
+    if (cur > 0)
+      ms += (boost::posix_time::milliseconds)cur;
     if (ms > get_default_timeout())
       ms = get_default_timeout();
     return ms;
@@ -747,7 +749,12 @@ PRAGMA_WARNING_DISABLE_VS(4355)
   template<class t_protocol_handler>
   void connection<t_protocol_handler>::reset_timer(boost::posix_time::milliseconds ms, bool add)
   {
-    MTRACE("Setting " << ms << " expiry");
+    if (ms.total_milliseconds() < 0)
+    {
+      MWARNING("Ignoring negative timeout " << ms);
+      return;
+    }
+    MTRACE((add ? "Adding" : "Setting") << " " << ms << " expiry");
     auto self = safe_shared_from_this();
     if(!self)
     {
@@ -760,7 +767,11 @@ PRAGMA_WARNING_DISABLE_VS(4355)
       return;
     }
     if (add)
-      ms += m_timer.expires_from_now();
+    {
+      const auto cur = m_timer.expires_from_now().total_milliseconds();
+      if (cur > 0)
+        ms += (boost::posix_time::milliseconds)cur;
+    }
     m_timer.expires_from_now(ms);
     m_timer.async_wait([=](const boost::system::error_code& ec)
     {

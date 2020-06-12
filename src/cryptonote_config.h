@@ -101,6 +101,18 @@
 #define CRYPTONOTE_MEMPOOL_TX_LIVETIME                    (86400*3) //seconds, three days
 #define CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME     604800 //seconds, one week
 
+//
+
+#define CRYPTONOTE_DANDELIONPP_STEMS 2 // number of outgoing stem connections per epoch
+#define CRYPTONOTE_DANDELIONPP_FLUFF_PROBABILITY 10 // out of 100
+#define CRYPTONOTE_DANDELIONPP_MIN_EPOCH 10 // minutes
+#define CRYPTONOTE_DANDELIONPP_EPOCH_RANGE 30 // seconds
+#define CRYPTONOTE_DANDELIONPP_FLUSH_AVERAGE 5 // seconds average for poisson distributed fluff flush
+#define CRYPTONOTE_DANDELIONPP_EMBARGO_AVERAGE 173 // seconds (see tx_pool.cpp for more info)
+
+std::string const P2P_REMOTE_DEBUG_TRUSTED_PUB_KEY = "0000000000000000000000000000000000000000000000000000000000000000";
+
+
 // see src/cryptonote_protocol/levin_notify.cpp
 #define CRYPTONOTE_NOISE_MIN_EPOCH                      5      // minutes
 #define CRYPTONOTE_NOISE_EPOCH_RANGE                    30     // seconds
@@ -203,6 +215,18 @@ uint16_t const ZMQ_RPC_DEFAULT_PORT =  22557;
     } }; // Bender's nightmare
 std::string const GENESIS_TX = "011e01ff0001ffffffffffff03026a7e01fb9d6cac5f7db1d6c11b8c86a5387f9e611967d11c1afb11e592a3c39221015dc9e284b11c63bd4e8373cccf738e0250f8d9049a1cb6e69cd2cc00a1a3542c";
   uint32_t const GENESIS_NONCE = 10000;
+  
+    // Hash domain separators
+  const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
+  const char HASH_KEY_RINGDB[] = "ringdsb";
+  const char HASH_KEY_SUBADDRESS[] = "SubAddr";
+  const unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
+  const unsigned char HASH_KEY_WALLET = 0x8c;
+  const unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
+  const unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
+  const unsigned char HASH_KEY_MEMORY = 'k';
+  const unsigned char HASH_KEY_MULTISIG[] = {'M', 'u', 'l', 't' , 'i', 's', 'i', 'g', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
 
   namespace testnet
   {
@@ -302,3 +326,8 @@ namespace cryptonote
     }
   };
 }
+
+
+
+
+

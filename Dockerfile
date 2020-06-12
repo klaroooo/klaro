@@ -55,8 +55,8 @@ RUN set -ex \
 ENV BOOST_ROOT /usr/local/boost_${BOOST_VERSION}
 
 # OpenSSL
-ARG OPENSSL_VERSION=1.1.1b
-ARG OPENSSL_HASH=5c557b023230413dfb0756f3137a13e6d726838ccd1430888ad15bfb2b43ea4b
+ARG OPENSSL_VERSION=1.1.1g
+ARG OPENSSL_HASH=ddb04774f1e32f0c49751e21b67216ac87852ceb056b75209af2443400636d46
 RUN set -ex \
     && curl -s -O https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz \
     && echo "${OPENSSL_HASH}  openssl-${OPENSSL_VERSION}.tar.gz" | sha256sum -c \
@@ -188,25 +188,25 @@ RUN set -ex && \
     rm -rf /var/lib/apt
 COPY --from=builder /src/build/release/bin /usr/local/bin/
 
-# Create monero user
-RUN adduser --system --group --disabled-password monero && \
-	mkdir -p /wallet /home/monero/.bitmonero && \
-	chown -R monero:monero /home/monero/.bitmonero && \
-	chown -R monero:monero /wallet
+# Create klaro user
+RUN adduser --system --group --disabled-password klaro && \
+	mkdir -p /wallet /home/klaro/.bitklaro && \
+	chown -R klaro:klaro /home/klaro/.bitklaro && \
+	chown -R klaro:klaro /wallet
 
 # Contains the blockchain
-VOLUME /home/monero/.bitmonero
+VOLUME /home/klaro/.bitklaro
 
 # Generate your wallet via accessing the container and run:
 # cd /wallet
-# monero-wallet-cli
+# klarowallet
 VOLUME /wallet
 
 EXPOSE 18080
 EXPOSE 18081
 
-# switch to user monero
-USER monero
+# switch to user klaro
+USER klaro
 
-ENTRYPOINT ["monerod", "--p2p-bind-ip=0.0.0.0", "--p2p-bind-port=18080", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081", "--non-interactive", "--confirm-external-bind"]
+ENTRYPOINT ["klarod", "--p2p-bind-ip=0.0.0.0", "--p2p-bind-port=18080", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081", "--non-interactive", "--confirm-external-bind"]
 

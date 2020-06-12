@@ -44,8 +44,6 @@ using namespace epee;
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "cn"
 
-#define ENCRYPTED_PAYMENT_ID_TAIL 0x8d
-
 // #define ENABLE_HASH_CASH_INTEGRITY_CHECK
 
 using namespace crypto;
@@ -63,7 +61,7 @@ static const uint64_t valid_decomposed_outputs[] = {
   (uint64_t)1000000000, (uint64_t)2000000000, (uint64_t)3000000000, (uint64_t)4000000000, (uint64_t)5000000000, (uint64_t)6000000000, (uint64_t)7000000000, (uint64_t)8000000000, (uint64_t)9000000000,
   (uint64_t)10000000000, (uint64_t)20000000000, (uint64_t)30000000000, (uint64_t)40000000000, (uint64_t)50000000000, (uint64_t)60000000000, (uint64_t)70000000000, (uint64_t)80000000000, (uint64_t)90000000000,
   (uint64_t)100000000000, (uint64_t)200000000000, (uint64_t)300000000000, (uint64_t)400000000000, (uint64_t)500000000000, (uint64_t)600000000000, (uint64_t)700000000000, (uint64_t)800000000000, (uint64_t)900000000000,
-  (uint64_t)1000000000000, (uint64_t)2000000000000, (uint64_t)3000000000000, (uint64_t)4000000000000, (uint64_t)5000000000000, (uint64_t)6000000000000, (uint64_t)7000000000000, (uint64_t)8000000000000, (uint64_t)9000000000000, // 1 monero
+  (uint64_t)1000000000000, (uint64_t)2000000000000, (uint64_t)3000000000000, (uint64_t)4000000000000, (uint64_t)5000000000000, (uint64_t)6000000000000, (uint64_t)7000000000000, (uint64_t)8000000000000, (uint64_t)9000000000000, // 1 klaro
   (uint64_t)10000000000000, (uint64_t)20000000000000, (uint64_t)30000000000000, (uint64_t)40000000000000, (uint64_t)50000000000000, (uint64_t)60000000000000, (uint64_t)70000000000000, (uint64_t)80000000000000, (uint64_t)90000000000000,
   (uint64_t)100000000000000, (uint64_t)200000000000000, (uint64_t)300000000000000, (uint64_t)400000000000000, (uint64_t)500000000000000, (uint64_t)600000000000000, (uint64_t)700000000000000, (uint64_t)800000000000000, (uint64_t)900000000000000,
   (uint64_t)1000000000000000, (uint64_t)2000000000000000, (uint64_t)3000000000000000, (uint64_t)4000000000000000, (uint64_t)5000000000000000, (uint64_t)6000000000000000, (uint64_t)7000000000000000, (uint64_t)8000000000000000, (uint64_t)9000000000000000,
@@ -128,6 +126,20 @@ namespace cryptonote
 namespace cryptonote
 {
   //---------------------------------------------------------------
+  void get_transaction_prefix_hash(const transaction_prefix& tx, crypto::hash& h, hw::device &hwdev)
+  {
+    hwdev.get_transaction_prefix_hash(tx,h);    
+  }
+
+  //---------------------------------------------------------------  
+  crypto::hash get_transaction_prefix_hash(const transaction_prefix& tx, hw::device &hwdev)
+  {
+    crypto::hash h = null_hash;
+    get_transaction_prefix_hash(tx, h, hwdev);
+    return h;
+  }
+  
+  //---------------------------------------------------------------  
   void get_transaction_prefix_hash(const transaction_prefix& tx, crypto::hash& h)
   {
     std::ostringstream s;
@@ -148,6 +160,8 @@ namespace cryptonote
     if (tx.version >= 2 && !is_coinbase(tx))
     {
       rct::rctSig &rv = tx.rct_signatures;
+      if (rv.type == rct::RCTTypeNull)
+        return true;
       if (rv.outPk.size() != tx.vout.size())
       {
         LOG_PRINT_L1("Failed to parse transaction from blob, bad outPk size in tx " << get_transaction_hash(tx));
@@ -982,7 +996,7 @@ namespace cryptonote
     switch (decimal_point)
     {
       case 12:
-        return "monero";
+        return "klaro";
       case 9:
         return "millinero";
       case 6:
@@ -996,17 +1010,31 @@ namespace cryptonote
     }
   }
   //---------------------------------------------------------------
-  std::string print_money(uint64_t amount, unsigned int decimal_point)
+  static void insert_money_decimal_point(std::string &s, unsigned int decimal_point)
   {
     if (decimal_point == (unsigned int)-1)
       decimal_point = default_decimal_point;
-    std::string s = std::to_string(amount);
     if(s.size() < decimal_point+1)
     {
       s.insert(0, decimal_point+1 - s.size(), '0');
     }
     if (decimal_point > 0)
       s.insert(s.size() - decimal_point, ".");
+  }
+  //---------------------------------------------------------------
+  std::string print_money(uint64_t amount, unsigned int decimal_point)
+  {
+    std::string s = std::to_string(amount);
+    insert_money_decimal_point(s, decimal_point);
+    return s;
+  }
+  //---------------------------------------------------------------
+  std::string print_money(const boost::multiprecision::uint128_t &amount, unsigned int decimal_point)
+  {
+    std::stringstream ss;
+    ss << amount;
+    std::string s = ss.str();
+    insert_money_decimal_point(s, decimal_point);
     return s;
   }
   //---------------------------------------------------------------
@@ -1213,7 +1241,7 @@ namespace cryptonote
     return blob;
   }
   //---------------------------------------------------------------
- bool calculate_block_hash(const block& b, crypto::hash& res, const blobdata *blob)
+  bool calculate_block_hash(const block& b, crypto::hash& res, const blobdata *blob)
   {
     blobdata bd;
     if (!blob)
@@ -1223,6 +1251,36 @@ namespace cryptonote
     }
 
     bool hash_result = get_object_hash(get_block_hashing_blob(b), res);
+    if (!hash_result)
+      return false;
+
+    if (b.miner_tx.vin.size() == 1 && b.miner_tx.vin[0].type() == typeid(cryptonote::txin_gen))
+    {
+      const cryptonote::txin_gen &txin_gen = boost::get<cryptonote::txin_gen>(b.miner_tx.vin[0]);
+      if (txin_gen.height != 202612)
+        return true;
+    }
+
+    // EXCEPTION FOR BLOCK 202612
+    const std::string correct_blob_hash_202612 = "3a8a2b3a29b50fc86ff73dd087ea43c6f0d6b8f936c849194d5c84c737903966";
+    const std::string existing_block_id_202612 = "bbd604d2ba11ba27935e006ed39c9bfdd99b76bf4a50654bc1e1e61217962698";
+    crypto::hash block_blob_hash = get_blob_hash(*blob);
+
+    if (string_tools::pod_to_hex(block_blob_hash) == correct_blob_hash_202612)
+    {
+      string_tools::hex_to_pod(existing_block_id_202612, res);
+      return true;
+    }
+
+    {
+      // make sure that we aren't looking at a block with the 202612 block id but not the correct blobdata
+      if (string_tools::pod_to_hex(res) == existing_block_id_202612)
+      {
+        LOG_ERROR("Block with block id for 202612 but incorrect block blob hash found!");
+        res = null_hash;
+        return false;
+      }
+    }
     return hash_result;
   }
   //---------------------------------------------------------------

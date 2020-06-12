@@ -80,9 +80,9 @@ set(crypto_private_headers
   CryptonightR_JIT.h
   CryptonightR_template.h)
 
-monero_private_headers(cncrypto
+klaro_private_headers(cncrypto
   ${crypto_private_headers})
-monero_add_library(cncrypto
+klaro_add_library(cncrypto
   ${crypto_sources}
   ${crypto_headers}
   ${crypto_private_headers})
