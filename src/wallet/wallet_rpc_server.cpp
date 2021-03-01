@@ -225,7 +225,7 @@ namespace tools
           string_encoding::base64_encode(rand_128bit.data(), rand_128bit.size())
         );
 
-        std::string temp = "monero-wallet-rpc." + bind_port + ".login";
+        std::string temp = "simplewallet-rpc." + bind_port + ".login";
         rpc_login_file = tools::private_file::create(temp);
         if (!rpc_login_file.handle())
         {
@@ -276,7 +276,7 @@ namespace tools
     tools::wallet2::BackgroundMiningSetupType setup = m_wallet->setup_background_mining();
     if (setup == tools::wallet2::BackgroundMiningNo)
     {
-      MLOG_RED(el::Level::Warning, "Background mining not enabled. Run \"set setup-background-mining 1\" in monero-wallet-cli to change.");
+      MLOG_RED(el::Level::Warning, "Background mining not enabled. Run \"set setup-background-mining 1\" in simplewallet-cli to change.");
       return;
     }
 
@@ -302,7 +302,7 @@ namespace tools
       MINFO("The daemon is not set up to background mine.");
       MINFO("With background mining enabled, the daemon will mine when idle and not on battery.");
       MINFO("Enabling this supports the network you are using, and makes you eligible for receiving new monero");
-      MINFO("Set setup-background-mining to 1 in monero-wallet-cli to change.");
+      MINFO("Set setup-background-mining to 1 in simplewallet-cli to change.");
       return;
     }
 
@@ -828,11 +828,30 @@ namespace tools
 
     if (!payment_id.empty())
     {
-      er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
-      er.message = "Standalone payment IDs are obsolete. Use subaddresses or integrated addresses instead";
-      return false;
-    }
-    return true;
+       /* Just to clarify */
+     const std::string& payment_id_str = payment_id;
+
+      crypto::hash long_payment_id;
+      crypto::hash8 short_payment_id;
+
+      /* Parse payment ID */
+      if (wallet2::parse_long_payment_id(payment_id_str, long_payment_id)) {
+        cryptonote::set_payment_id_to_tx_extra_nonce(extra_nonce, long_payment_id);
+      }
+      else {
+        er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
+        er.message = "Payment id has invalid format: \"" + payment_id_str + "\", expected 64 character string";
+        return false;
+      }
+
+      /* Append Payment ID data into extra */
+      if (!cryptonote::add_extra_nonce_to_tx_extra(extra, extra_nonce)) {
+        er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
+        er.message = "Something went wrong with payment_id. Please check its format: \"" + payment_id_str + "\", expected 64-character string";
+        return false;
+      }
+
+     }    return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   static std::string ptx_to_string(const tools::wallet2::pending_tx &ptx)
@@ -4552,12 +4571,12 @@ int main(int argc, char** argv) {
   bool should_terminate = false;
   std::tie(vm, should_terminate) = wallet_args::main(
     argc, argv,
-    "monero-wallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
+    "simplewallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
     tools::wallet_rpc_server::tr("This is the RPC monero wallet. It needs to connect to a monero\ndaemon to work correctly."),
     desc_params,
     po::positional_options_description(),
     [](const std::string &s, bool emphasis){ epee::set_console_color(emphasis ? epee::console_color_white : epee::console_color_default, true); std::cout << s << std::endl; if (emphasis) epee::reset_console_color(); },
-    "monero-wallet-rpc.log",
+    "simplewallet-rpc.log",
     true
   );
   if (!vm)
